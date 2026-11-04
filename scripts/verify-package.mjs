@@ -40,7 +40,7 @@ function check(name, fn) {
   } catch (error) {
     failures.push(name);
     const detail =
-      error instanceof Error ? (error.stderr ?? error.stdout ?? error.message) : String(error);
+      error instanceof Error ? error.stderr || error.stdout || error.message : String(error);
     console.log(`  FAIL ${name}\n${String(detail).trim().replace(/^/gm, '       ')}`);
   }
 }
@@ -87,7 +87,8 @@ try {
 
   console.log('Tarball contents');
   check('only allow-listed files are published', () => {
-    const allowed = /^(package\.json|LICENSE|README\.md|CHANGELOG\.md|dist\/.+)$/;
+    const allowed =
+      /^(package\.json|LICENSE|README\.md|CHANGELOG\.md|THIRD_PARTY_NOTICES\.md|dist\/.+)$/;
     const unexpected = files.filter((f) => !allowed.test(f));
     assert(unexpected.length === 0, `unexpected files: ${unexpected.join(', ')}`);
   });
@@ -101,6 +102,8 @@ try {
       'dist/node.js',
       'dist/browser.js',
       'dist/testing.js',
+      'dist/kanji.js',
+      'THIRD_PARTY_NOTICES.md',
     ]) {
       assert(files.includes(f), `missing ${f}`);
     }
@@ -166,7 +169,8 @@ import { join } from 'node:path';
 import { createNodeKit } from 'qrcode-toolkit/node';
 import { createBrowserKit } from 'qrcode-toolkit/browser';
 import { checkExporterProvider, assertConformance } from 'qrcode-toolkit/testing';
-import { createSvgExporter } from 'qrcode-toolkit';
+import { createSvgExporter, createQRCodeKit } from 'qrcode-toolkit';
+import { createJisX0208KanjiMapper } from 'qrcode-toolkit/kanji';
 
 // the browser entry loads under Node without any DOM and only fails when a canvas is really needed
 if (typeof globalThis.document !== 'undefined') throw new Error('unexpected DOM');
@@ -183,6 +187,11 @@ const nodeKit = createNodeKit({ files: { baseDir: dir } });
 const written = await nodeKit.generate({ data: 'file', format: 'png-file', path: 'out.png' });
 if (readFileSync(join(dir, 'out.png'))[1] !== 0x50 || written.value.bytes < 50) throw new Error('file not written');
 assertConformance(await checkExporterProvider(createSvgExporter()));
+
+// the opt-in Kanji entry works without any platform Shift JIS support
+const kit = createQRCodeKit({ kanji: createJisX0208KanjiMapper() });
+const matrix = kit.encode({ data: '日本語の漢字', kanji: true });
+if (matrix.segments[0].mode !== 'kanji') throw new Error('kanji mode not used');
 `,
   );
   check('node, browser and testing entries work from the tarball', () =>
@@ -224,6 +233,39 @@ globalThis.out = [createQRCode, createBrowserKit];
     assert(!/node:(fs|path|zlib|buffer)/.test(bundle), 'bundle references Node built-ins');
     assert(out.trim() === '', out);
   });
+  check('the JIS X 0208 table is only bundled when qrcode-toolkit/kanji is imported', () => {
+    const probe = '亜唖娃阿哀'; // consecutive JIS X 0208 level 1 kanji, present only in the embedded table
+    const bundle = (name, source) => {
+      writeFileSync(join(consumer, `${name}.js`), source);
+      run(
+        bin('esbuild'),
+        [
+          `${name}.js`,
+          '--bundle',
+          '--platform=browser',
+          '--format=esm',
+          '--minify',
+          '--charset=utf8',
+          `--outfile=${name}.out.js`,
+        ],
+        { cwd: consumer },
+      );
+      return readFileSync(join(consumer, `${name}.out.js`), 'utf8');
+    };
+    const main = bundle(
+      'kanji-main',
+      `import { createQRCode } from 'qrcode-toolkit';\nimport { createBrowserKit } from 'qrcode-toolkit/browser';\nglobalThis.x = [createQRCode, createBrowserKit];\n`,
+    );
+    assert(!main.includes(probe), 'the default bundle contains the JIS X 0208 table');
+    const withTable = bundle(
+      'kanji-opt',
+      `import { createJisX0208KanjiMapper } from 'qrcode-toolkit/kanji';\nglobalThis.x = createJisX0208KanjiMapper;\n`,
+    );
+    assert(withTable.includes(probe), 'the kanji entry does not contain the table');
+    console.log(
+      `       (kanji entry bundle: ${String(Buffer.byteLength(withTable))} bytes minified)`,
+    );
+  });
   check('tree-shaking: importing one function does not pull in the rest of the API', () => {
     writeFileSync(
       join(consumer, 'shake.js'),
@@ -262,6 +304,7 @@ globalThis.out = [createQRCode, createBrowserKit];
 } from 'qrcode-toolkit';
 import { createNodeKit } from 'qrcode-toolkit/node';
 import { createBrowserKit } from 'qrcode-toolkit/browser';
+import { createJisX0208KanjiMapper } from 'qrcode-toolkit/kanji';
 import { assertConformance, checkEncoderProvider } from 'qrcode-toolkit/testing';
 
 async function main(): Promise<void> {
@@ -285,6 +328,9 @@ async function main(): Promise<void> {
   await createQRCode({ data: 'x', ecc: 'Z' });
   const code: ErrorCode = new InvalidInputError('x').code;
   void [asString, asBytes, defaultIsString, textValue, typed, fileBytes, blobType, wrong, code, isQRCodeKitError];
+  const mapper = createJisX0208KanjiMapper().shiftJisCode(0x65e5);
+  const mapped: number | undefined = mapper;
+  void mapped;
   const provider: EncoderProvider | undefined = undefined;
   if (provider) assertConformance(await checkEncoderProvider(provider));
 }

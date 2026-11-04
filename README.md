@@ -90,7 +90,7 @@ Importing `qrcode-toolkit/browser` touches no DOM API, so it is safe in server-s
 | `boostEcc`                  | `false`        | Raise the level while the data still fits in the chosen version                            |
 | `charset`                   | `'utf-8'`      | `'utf-8'` or `'iso-8859-1'` for string data                                                |
 | `eci`                       | `false`        | `true`: declare the charset of text (ECI 26 / 3). A number: declare that ECI for byte data |
-| `kanji`                     | `false`        | Allow Kanji mode (13 bits per character) for text it can represent                         |
+| `kanji`                     | `false`        | Allow Kanji mode (13 bits per character) for JIS X 0208 text; see [Kanji](#kanji)          |
 | `fnc1`                      | –              | `'first'` or `{ applicationIndicator }` for GS1 / application data                         |
 | `format`                    | `'svg'`        | See [formats](#formats)                                                                    |
 | `quietZone`                 | `4`            | Quiet zone in modules (a warning is returned below 4)                                      |
@@ -117,6 +117,18 @@ Unknown options and options the selected providers cannot honour raise an error;
 ### Text encoding and ECI
 
 By default text is encoded as UTF-8 **without** an ECI header. This is what the large majority of scanners expect and read correctly. Declaring the charset with `eci: true` follows the standard more strictly, but some readers mishandle ECI (jsQR returns an empty string for ECI 3, for example). Use `eci` when you know your scanners support it.
+
+### Kanji
+
+```ts
+import { createQRCodeKit } from 'qrcode-toolkit';
+import { createJisX0208KanjiMapper } from 'qrcode-toolkit/kanji'; // optional, platform independent
+
+const kit = createQRCodeKit({ kanji: createJisX0208KanjiMapper() });
+kit.encode({ data: '日本語のテキスト', kanji: true }); // Kanji mode: 13 bits per character
+```
+
+Kanji mode covers exactly the 6 872 JIS X 0208 characters whose Unicode mapping is the same in the Unicode Consortium's table and in Windows-31J. Everything else (including the Windows extensions and seven ambiguous characters such as `～` U+FF5E) is encoded in byte mode, which always round-trips. Without the `/kanji` entry the mapping is derived from the platform's `TextDecoder('shift_jis')`; where that is missing a `RUNTIME_UNAVAILABLE` error points you to the entry.
 
 ### Structured append
 
@@ -156,7 +168,7 @@ The core has no framework dependency, and the built-in providers are synchronous
 
 - Only QR Code Model 2. Micro QR and rMQR are not supported.
 - PNG output is two-colour (1-bit palette). Gradients, rounded modules and logos are not implemented.
-- Kanji mode relies on the platform's `TextDecoder('shift_jis')` (Windows-31J) unless you pass your own `kanji` mapper.
+- Kanji mode is strictly JIS X 0208 (6 872 characters; seven characters whose Windows and JIS mappings disagree use byte mode instead). By default it reads the platform's `TextDecoder('shift_jis')`; import `qrcode-toolkit/kanji` for a built-in table that needs no platform support (about 21 kB, only bundled when imported).
 - Real-device scanning (iOS / Android cameras) and real-browser runs have not been part of the automated verification.
 - Deno, Bun and edge runtimes are not claimed to be supported.
 

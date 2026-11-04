@@ -30,3 +30,8 @@ jobs:
       - run: npm test
       - run: npm run build
       - run: npm run verify:package
+      - name: Audit shipped dependencies (must be clean)
+        run: npm audit --omit=dev --audit-level=low
+      - name: Audit development dependencies (reported, not blocking)
+        run: npm audit --audit-level=moderate
+        continue-on-error: true

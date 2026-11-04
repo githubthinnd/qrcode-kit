@@ -6,6 +6,7 @@
  *   core         QR algorithm, no runtime globals                -> domain
  *   contracts    provider/capability/plugin interfaces           -> domain
  *   formats      PNG/deflate/base64 writers (no QR knowledge)    -> (nothing)
+ *   kanji-table  embedded JIS X 0208 data (opt-in entry)         -> core, domain
  *   registry     instance-scoped provider registry               -> contracts, domain
  *   application  use cases and orchestration                     -> contracts, domain
  *   providers/*  built-in adapters (one directory per provider)  -> contracts, domain
@@ -71,6 +72,20 @@ module.exports = {
       comment: 'File-format writers know nothing about QR Codes, providers or the domain.',
       from: { path: '^src/formats/' },
       to: { path: '^src/', pathNot: '^src/formats/' },
+    },
+    {
+      name: 'kanji-table-depends-on-core-and-domain',
+      severity: 'error',
+      from: { path: '^src/kanji-table/' },
+      to: { path: '^src/', pathNot: '^src/(kanji-table|core|domain)/' },
+    },
+    {
+      name: 'only-entries-import-kanji-table',
+      severity: 'error',
+      comment:
+        'The embedded table is an opt-in entry point; the default bundle must not contain it.',
+      from: { path: '^src/', pathNot: '^src/(kanji-table/|[^/]+\\.ts$)' },
+      to: { path: '^src/kanji-table/' },
     },
     {
       name: 'contracts-depend-only-on-domain',
@@ -150,7 +165,7 @@ module.exports = {
       name: 'entries-depend-on-public-runtimes-testing-only',
       severity: 'error',
       from: { path: '^src/[^/]+\\.ts$' },
-      to: { path: '^src/', pathNot: '^src/(public/|runtimes/|testing/|[^/]+\\.ts$)' },
+      to: { path: '^src/', pathNot: '^src/(public/|runtimes/|testing/|kanji-table/|[^/]+\\.ts$)' },
     },
     {
       name: 'src-must-not-import-tests',

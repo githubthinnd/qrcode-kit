@@ -23,7 +23,13 @@ describe('package manifest invariants', () => {
   it('is ESM-only, side-effect free and ships an explicit allowlist', () => {
     expect(manifest['type']).toBe('module');
     expect(manifest['sideEffects']).toBe(false);
-    expect(manifest['files']).toEqual(['dist', 'README.md', 'CHANGELOG.md', 'LICENSE']);
+    expect(manifest['files']).toEqual([
+      'dist',
+      'README.md',
+      'CHANGELOG.md',
+      'LICENSE',
+      'THIRD_PARTY_NOTICES.md',
+    ]);
     expect(manifest['main']).toBeUndefined();
   });
 

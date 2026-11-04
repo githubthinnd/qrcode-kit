@@ -17,3 +17,13 @@ All notable changes to this project are documented here. The format follows
 - Typed error model, warnings in results, input and raster size limits.
 - Verification suite: bit-exact comparison with four independent implementations, three independent decoders, seeded fuzzing, capacity and Reed-Solomon property tests, packed-tarball consumer tests, runnable examples, benchmark script.
 - Project foundation: strict TypeScript, ESLint, Prettier, Vitest, architecture rules (dependency-cruiser), CI definition.
+
+### Changed
+
+- Kanji mode is now strictly JIS X 0208 (6 872 characters), verified per character against the Unicode Consortium's table; Windows-31J extensions and seven ambiguous characters use byte mode.
+
+### Added
+
+- `qrcode-toolkit/kanji`: built-in JIS X 0208 mapper that needs no platform Shift JIS support (not part of the default bundle).
+- `npm run check:name`: npm name availability and similarity probe.
+- Security: `minimatch` override resolves the only `npm audit` findings; CI audits shipped (blocking) and development (reported) dependencies.
