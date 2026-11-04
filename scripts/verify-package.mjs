@@ -1,10 +1,19 @@
 // Verifies the *packed tarball*, not the source tree: contents allowlist, zero
-// dependencies, ESM import, require(esm), TypeScript consumption, publint and
+// dependencies, no runtime globals in universal code, ESM import, require(esm),
+// every subpath entry, browser bundling, TypeScript consumption, publint and
 // "Are the types wrong?". Run after `npm run build`.
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join, relative, resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '..');
 const bin = (name) => join(root, 'node_modules', '.bin', name);
@@ -38,11 +47,34 @@ function check(name, fn) {
 function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
+function listFiles(dir) {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
+    entry.isDirectory() ? listFiles(join(dir, entry.name)) : [join(dir, entry.name)],
+  );
+}
 
 try {
   if (!existsSync(join(root, 'dist', 'index.js'))) {
     throw new Error('dist/ is missing. Run `npm run build` first.');
   }
+
+  console.log('Universal code is free of runtime globals');
+  check('dist/ outside src/runtimes contains no Node.js or DOM references', () => {
+    const forbidden =
+      /\b(node:[a-z/]+|require\(|process\.|Buffer\b|window\b|document\b|navigator\b|__dirname|OffscreenCanvas|HTMLCanvasElement)/;
+    const allowed = (file) => /dist\/(runtimes\/|node\.|browser\.)/.test(file);
+    // `globalThis` capability probes are allowed: they are guarded lookups, not assumptions.
+    const offenders = [];
+    for (const file of listFiles(join(root, 'dist')).filter((f) => f.endsWith('.js'))) {
+      if (allowed(file)) continue;
+      const stripped = readFileSync(file, 'utf8')
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/(^|\s)\/\/.*$/gm, '$1');
+      const match = forbidden.exec(stripped);
+      if (match) offenders.push(`${relative(root, file)}: ${match[0]}`);
+    }
+    assert(offenders.length === 0, offenders.join('\n'));
+  });
 
   console.log('Packing…');
   const packDir = join(work, 'pack');
@@ -60,11 +92,20 @@ try {
     assert(unexpected.length === 0, `unexpected files: ${unexpected.join(', ')}`);
   });
   check('required files are present', () => {
-    for (const f of ['package.json', 'LICENSE', 'README.md', 'dist/index.js', 'dist/index.d.ts']) {
+    for (const f of [
+      'package.json',
+      'LICENSE',
+      'README.md',
+      'dist/index.js',
+      'dist/index.d.ts',
+      'dist/node.js',
+      'dist/browser.js',
+      'dist/testing.js',
+    ]) {
       assert(files.includes(f), `missing ${f}`);
     }
   });
-  check('packed package.json declares no dependencies', () => {
+  check('package declares no dependencies', () => {
     const manifest = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
     for (const field of ['dependencies', 'peerDependencies', 'optionalDependencies']) {
       assert(manifest[field] === undefined, `${field} must be absent`);
@@ -81,23 +122,35 @@ try {
   run('npm', ['install', tarball, '--offline', '--ignore-scripts', '--no-audit', '--no-fund'], {
     cwd: consumer,
   });
-
-  const expectedExports = ['QRCodeKitError', 'InvalidInputError', 'isQRCodeKitError'];
+  const installed = readdirSync(join(consumer, 'node_modules')).filter((n) => !n.startsWith('.'));
+  check('installing pulls in no other packages', () => {
+    assert(
+      installed.length === 1 && installed[0] === 'qrcode-toolkit',
+      `installed: ${installed.join(', ')}`,
+    );
+  });
 
   writeFileSync(
     join(consumer, 'esm.mjs'),
-    `import * as kit from 'qrcode-toolkit';
-for (const name of ${JSON.stringify(expectedExports)}) if (!(name in kit)) throw new Error('missing export ' + name);
-const e = new kit.InvalidInputError('x');
-if (!(e instanceof kit.QRCodeKitError) || e.code !== 'INVALID_INPUT') throw new Error('bad error class');
+    `import { createQRCode, createQRCodeKit, InvalidInputError, QRCodeKitError } from 'qrcode-toolkit';
+const svg = await createQRCode({ data: 'https://example.com', format: 'svg' });
+if (!svg.value.startsWith('<svg')) throw new Error('bad svg');
+const png = await createQRCode({ data: 'Xin chào', format: 'png' });
+if (!(png.value instanceof Uint8Array) || png.value[1] !== 0x50) throw new Error('bad png');
+const e = new InvalidInputError('x');
+if (!(e instanceof QRCodeKitError) || e.code !== 'INVALID_INPUT') throw new Error('bad error class');
+if (createQRCodeKit().describe().formats.length < 5) throw new Error('missing formats');
 `,
   );
-  check('ESM import works', () => run('node', ['esm.mjs'], { cwd: consumer }));
+  check('ESM import works and generates SVG and PNG', () =>
+    run('node', ['esm.mjs'], { cwd: consumer }),
+  );
 
   writeFileSync(
     join(consumer, 'cjs.cjs'),
     `const kit = require('qrcode-toolkit');
-for (const name of ${JSON.stringify(expectedExports)}) if (!(name in kit)) throw new Error('missing export ' + name);
+const result = kit.createQRCodeKit().generateSync({ data: 'sync', format: 'text' });
+if (!result.value.includes('█')) throw new Error('no output');
 if (!kit.isQRCodeKitError(new kit.InvalidInputError('x'))) throw new Error('guard failed');
 `,
   );
@@ -106,18 +159,136 @@ if (!kit.isQRCodeKitError(new kit.InvalidInputError('x'))) throw new Error('guar
   );
 
   writeFileSync(
+    join(consumer, 'entries.mjs'),
+    `import { writeFileSync, readFileSync, mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { createNodeKit } from 'qrcode-toolkit/node';
+import { createBrowserKit } from 'qrcode-toolkit/browser';
+import { checkExporterProvider, assertConformance } from 'qrcode-toolkit/testing';
+import { createSvgExporter } from 'qrcode-toolkit';
+
+// the browser entry loads under Node without any DOM and only fails when a canvas is really needed
+if (typeof globalThis.document !== 'undefined') throw new Error('unexpected DOM');
+const browserKit = createBrowserKit();
+await browserKit.generate({ data: 'x', format: 'png-blob' }).then(
+  () => { throw new Error('expected a RuntimeUnavailableError'); },
+  (error) => { if (error.code !== 'RUNTIME_UNAVAILABLE') throw error; },
+);
+const svg = await browserKit.generate({ data: 'x', format: 'svg' }); // universal formats still work
+if (!svg.value.startsWith('<svg')) throw new Error('svg failed in browser kit');
+
+const dir = mkdtempSync(join(tmpdir(), 'qtk-consumer-'));
+const nodeKit = createNodeKit({ files: { baseDir: dir } });
+const written = await nodeKit.generate({ data: 'file', format: 'png-file', path: 'out.png' });
+if (readFileSync(join(dir, 'out.png'))[1] !== 0x50 || written.value.bytes < 50) throw new Error('file not written');
+assertConformance(await checkExporterProvider(createSvgExporter()));
+`,
+  );
+  check('node, browser and testing entries work from the tarball', () =>
+    run('node', ['entries.mjs'], { cwd: consumer }),
+  );
+
+  for (const example of ['basic', 'files', 'custom-provider', 'structured-append']) {
+    check(`examples/node/${example}.mjs runs against the packed tarball`, () => {
+      writeFileSync(
+        join(consumer, `example-${example}.mjs`),
+        readFileSync(join(root, 'examples', 'node', `${example}.mjs`), 'utf8'),
+      );
+      run('node', [`example-${example}.mjs`], { cwd: consumer });
+    });
+  }
+
+  writeFileSync(
+    join(consumer, 'bundle-entry.js'),
+    `import { createQRCode } from 'qrcode-toolkit';
+import { createBrowserKit } from 'qrcode-toolkit/browser';
+globalThis.out = [createQRCode, createBrowserKit];
+`,
+  );
+  check('bundles for the browser without Node.js built-ins (esbuild, platform=browser)', () => {
+    const out = run(
+      bin('esbuild'),
+      [
+        'bundle-entry.js',
+        '--bundle',
+        '--platform=browser',
+        '--format=esm',
+        '--minify',
+        '--outfile=out.js',
+        '--log-level=warning',
+      ],
+      { cwd: consumer },
+    );
+    const bundle = readFileSync(join(consumer, 'out.js'), 'utf8');
+    assert(!/node:(fs|path|zlib|buffer)/.test(bundle), 'bundle references Node built-ins');
+    assert(out.trim() === '', out);
+  });
+  check('tree-shaking: importing one function does not pull in the rest of the API', () => {
+    writeFileSync(
+      join(consumer, 'shake.js'),
+      `import { QRCodeKitError } from 'qrcode-toolkit';\nglobalThis.x = QRCodeKitError;\n`,
+    );
+    run(
+      bin('esbuild'),
+      [
+        'shake.js',
+        '--bundle',
+        '--platform=browser',
+        '--format=esm',
+        '--minify',
+        '--outfile=shake.out.js',
+      ],
+      { cwd: consumer },
+    );
+    const size = readFileSync(join(consumer, 'shake.out.js')).length;
+    assert(
+      size < 3000,
+      `error-only bundle is ${String(size)} bytes; sideEffects/tree-shaking is not working`,
+    );
+  });
+
+  writeFileSync(
     join(consumer, 'index.ts'),
-    `import { InvalidInputError, isQRCodeKitError, type ErrorCode } from 'qrcode-toolkit';
-const code: ErrorCode = new InvalidInputError('x').code;
-const guarded: unknown = new InvalidInputError('x');
-if (isQRCodeKitError(guarded)) {
-  const c: ErrorCode = guarded.code;
-  void c;
+    `import {
+  createQRCode,
+  createQRCodeKit,
+  segment,
+  InvalidInputError,
+  isQRCodeKitError,
+  type ErrorCode,
+  type EncoderProvider,
+  type GenerateResult,
+} from 'qrcode-toolkit';
+import { createNodeKit } from 'qrcode-toolkit/node';
+import { createBrowserKit } from 'qrcode-toolkit/browser';
+import { assertConformance, checkEncoderProvider } from 'qrcode-toolkit/testing';
+
+async function main(): Promise<void> {
+  const svg = await createQRCode({ data: 'x', format: 'svg' });
+  const asString: string = svg.value;
+  const png = await createQRCode({ data: 'x', format: 'png' });
+  const asBytes: Uint8Array = png.value;
+  const dflt = await createQRCode({ data: 'x' });
+  const defaultIsString: string = dflt.value;
+  const text = createQRCodeKit().generateSync({ data: [segment.numeric('123')], format: 'text' });
+  const textValue: string = text.value;
+  const typed: GenerateResult<'png-data-url'> = await createQRCode({ data: 'x', format: 'png-data-url' });
+  const nodeKit = createNodeKit();
+  const file = await nodeKit.generate({ data: 'x', format: 'png-file', path: 'a.png' });
+  const fileBytes: number = file.value.bytes;
+  const blob = await createBrowserKit().generate({ data: 'x', format: 'webp-blob' });
+  const blobType: string = blob.value.type;
+  // @ts-expect-error png output is bytes, not a string
+  const wrong: string = png.value;
+  // @ts-expect-error ecc is a closed union
+  await createQRCode({ data: 'x', ecc: 'Z' });
+  const code: ErrorCode = new InvalidInputError('x').code;
+  void [asString, asBytes, defaultIsString, textValue, typed, fileBytes, blobType, wrong, code, isQRCodeKitError];
+  const provider: EncoderProvider | undefined = undefined;
+  if (provider) assertConformance(await checkEncoderProvider(provider));
 }
-// @ts-expect-error codes are a closed union
-const bad: ErrorCode = 'NOT_A_CODE';
-void code;
-void bad;
+void main;
 `,
   );
   writeFileSync(
@@ -136,8 +307,9 @@ void bad;
       include: ['index.ts'],
     }),
   );
-  check('TypeScript consumer compiles against shipped declarations', () =>
-    run(bin('tsc'), ['-p', 'tsconfig.json'], { cwd: consumer }),
+  check(
+    'TypeScript consumer compiles against shipped declarations (no @types/node, no DOM lib)',
+    () => run(bin('tsc'), ['-p', 'tsconfig.json'], { cwd: consumer }),
   );
 
   console.log('Package linters');

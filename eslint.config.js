@@ -62,12 +62,27 @@ export default tseslint.config(
     },
   },
   {
+    // Boundary validation: values typed as literals are still checked at runtime because
+    // callers may be plain JavaScript, so "unnecessary" conditions are intentional here.
+    files: [
+      'src/application/normalize.ts',
+      'src/application/colors.ts',
+      'src/registry/registry.ts',
+      'src/public/kit.ts',
+      'src/testing/index.ts',
+      'src/runtimes/**/*.ts',
+    ],
+    rules: { '@typescript-eslint/no-unnecessary-condition': 'off' },
+  },
+  {
     files: ['**/*.js', '**/*.cjs', '**/*.mjs'],
     ...tseslint.configs.disableTypeChecked,
   },
   {
-    files: ['scripts/**/*.mjs'],
-    languageOptions: { globals: { process: 'readonly', console: 'readonly' } },
+    files: ['scripts/**/*.mjs', 'bench/**/*.mjs', 'examples/**/*.mjs'],
+    languageOptions: {
+      globals: { process: 'readonly', console: 'readonly', Buffer: 'readonly' },
+    },
   },
   {
     files: ['**/*.cjs'],

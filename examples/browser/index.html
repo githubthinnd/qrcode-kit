@@ -1,0 +1,40 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>qrcode-toolkit in the browser</title>
+<h1>qrcode-toolkit</h1>
+<input id="text" size="50" value="https://example.com" />
+<div id="svg"></div>
+<img id="png" alt="QR code (PNG blob)" />
+<pre id="log"></pre>
+<script type="module">
+  // Serve the repository root with any static file server and open this page, e.g.:
+  //   npm run build && npx http-server . -p 8080   → http://localhost:8080/examples/browser/
+  import { createQRCodeKit } from '../../dist/index.js';
+  import { createBrowserKit } from '../../dist/browser.js';
+
+  const kit = createQRCodeKit();
+  const browserKit = createBrowserKit();
+  const input = document.getElementById('text');
+
+  async function update() {
+    // SVG is synchronous with the built-in providers.
+    document.getElementById('svg').innerHTML = kit.generateSync({
+      data: input.value,
+      format: 'svg',
+      size: 256,
+    }).value;
+    try {
+      const { value } = await browserKit.generate({
+        data: input.value,
+        format: 'png-blob',
+        scale: 6,
+      });
+      document.getElementById('png').src = URL.createObjectURL(value);
+      document.getElementById('log').textContent = `png-blob: ${value.size} bytes`;
+    } catch (error) {
+      document.getElementById('log').textContent = `${error.code}: ${error.message}`;
+    }
+  }
+  input.addEventListener('input', update);
+  update();
+</script>

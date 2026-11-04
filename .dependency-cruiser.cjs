@@ -5,6 +5,7 @@
  *   domain       pure model, errors, invariants                  -> (nothing)
  *   core         QR algorithm, no runtime globals                -> domain
  *   contracts    provider/capability/plugin interfaces           -> domain
+ *   formats      PNG/deflate/base64 writers (no QR knowledge)    -> (nothing)
  *   registry     instance-scoped provider registry               -> contracts, domain
  *   application  use cases and orchestration                     -> contracts, domain
  *   providers/*  built-in adapters (one directory per provider)  -> contracts, domain
@@ -65,6 +66,13 @@ module.exports = {
       to: { path: '^src/', pathNot: '^src/(core|domain)/' },
     },
     {
+      name: 'formats-are-self-contained',
+      severity: 'error',
+      comment: 'File-format writers know nothing about QR Codes, providers or the domain.',
+      from: { path: '^src/formats/' },
+      to: { path: '^src/', pathNot: '^src/formats/' },
+    },
+    {
       name: 'contracts-depend-only-on-domain',
       severity: 'error',
       from: { path: '^src/contracts/' },
@@ -88,7 +96,7 @@ module.exports = {
       name: 'providers-depend-on-contracts-and-domain',
       severity: 'error',
       from: { path: '^src/providers/' },
-      to: { path: '^src/', pathNot: '^src/(providers|contracts|domain|core)/' },
+      to: { path: '^src/', pathNot: '^src/(providers|contracts|domain|core|formats)/' },
     },
     {
       name: 'only-encoder-providers-use-core',
@@ -108,7 +116,7 @@ module.exports = {
       name: 'runtimes-depend-on-contracts-and-domain',
       severity: 'error',
       from: { path: '^src/runtimes/' },
-      to: { path: '^src/', pathNot: '^src/(runtimes|contracts|domain)/' },
+      to: { path: '^src/', pathNot: '^src/(runtimes|contracts|domain|formats)/' },
     },
     {
       name: 'no-runtime-to-runtime-coupling',
@@ -120,14 +128,29 @@ module.exports = {
     {
       name: 'only-public-and-entries-import-public',
       severity: 'error',
-      from: { path: '^src/', pathNot: '^src/(public/|[^/]+\\.ts$)' },
+      from: { path: '^src/', pathNot: '^src/(public/|testing/|[^/]+\\.ts$)' },
       to: { path: '^src/public/' },
     },
     {
-      name: 'entries-depend-on-public-only',
+      name: 'only-entries-import-testing',
+      severity: 'error',
+      comment: 'The conformance kit is a separate entry point; library code must not depend on it.',
+      from: { path: '^src/', pathNot: '^src/(testing/|[^/]+\\.ts$)' },
+      to: { path: '^src/testing/' },
+    },
+    {
+      name: 'testing-depends-on-public-api-only',
+      severity: 'error',
+      comment:
+        'The conformance kit is written against the stable public surface, like any provider package would be.',
+      from: { path: '^src/testing/' },
+      to: { path: '^src/', pathNot: '^src/(testing|public|contracts|domain)/' },
+    },
+    {
+      name: 'entries-depend-on-public-runtimes-testing-only',
       severity: 'error',
       from: { path: '^src/[^/]+\\.ts$' },
-      to: { path: '^src/', pathNot: '^src/(public/|[^/]+\\.ts$)' },
+      to: { path: '^src/', pathNot: '^src/(public/|runtimes/|testing/|[^/]+\\.ts$)' },
     },
     {
       name: 'src-must-not-import-tests',
