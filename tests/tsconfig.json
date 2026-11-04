@@ -1,0 +1,11 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "..",
+    "types": ["node"],
+    "noEmit": true,
+    "isolatedDeclarations": false
+  },
+  "include": ["./**/*.ts", "../src", "../vitest.config.ts"],
+  "exclude": ["./architecture/fixtures"]
+}

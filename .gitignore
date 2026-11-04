@@ -1,0 +1,10 @@
+# Dependencies and build output
+node_modules/
+dist/
+coverage/
+*.tgz
+
+# Local tooling
+.DS_Store
+.env
+.env.*
