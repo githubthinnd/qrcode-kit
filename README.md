@@ -1,7 +1,6 @@
 <div align="center">
-# qrcode-toolkit
-
-**Zero-dependency QR code generator for any JS framework, the browser, Node.js and SSR.**<br />
+<h1 align="center">qrcode-toolkit</h1>
+<b>Zero-dependency QR code generator for any JS framework, the browser, Node.js and SSR.</b><br />
 Written in TypeScript, works at build time too · SVG, PNG, canvas and Blob output · Kanji, ECI, GS1 and structured append.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-4f46e5.svg)](LICENSE)
@@ -9,6 +8,8 @@ Written in TypeScript, works at build time too · SVG, PNG, canvas and Blob outp
 ![TypeScript: strict](https://img.shields.io/badge/TypeScript-strict-3178c6.svg)
 ![ESM only](https://img.shields.io/badge/module-ESM-f59e0b.svg)
 ![Node.js: ^22.12 or >=24](https://img.shields.io/badge/node-%5E22.12%20%7C%7C%20%3E%3D24-5fa04e.svg)
+[![npm version](https://img.shields.io/npm/v/qrcode-toolkit.svg?color=4f46e5)](https://www.npmjs.com/package/qrcode-toolkit)
+[![CI](https://github.com/githubthinnd/qrcode-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/githubthinnd/qrcode-toolkit/actions/workflows/ci.yml)
 ![Status: pre-release](https://img.shields.io/badge/status-pre--release-ef4444.svg)
 
 [Quick start](#quick-start) · [Framework guides](#framework-guides) · [Cookbook](#cookbook) · [API](#api-reference) · [Playground](#playground) · [FAQ](#faq)
@@ -21,7 +22,7 @@ Written in TypeScript, works at build time too · SVG, PNG, canvas and Blob outp
 
 `qrcode-toolkit` generates **QR Codes (Model 2, versions 1–40)** in the browser, on the server and at build time, from one small typed API. The encoder, the SVG and bitmap renderers and the PNG writer are all written in this repository. There is **nothing to install besides the package itself**, and every piece of output is checked against independent QR implementations and decoders.
 
-> **Status: pre-release (0.1.0), published under the npm `next` tag.** The API may still change before 1.0. Install with `npm install qrcode-toolkit@next`; a plain `npm install qrcode-toolkit` will resolve once 1.0.0 is released.
+> **Status: pre-release (0.1.x).** The API may still change before 1.0; pin the version (`npm install qrcode-toolkit@0.1`) if you need stability.
 
 ## Why qrcode-toolkit
 
@@ -38,16 +39,16 @@ Written in TypeScript, works at build time too · SVG, PNG, canvas and Blob outp
 ## Install
 
 ```bash
-npm install qrcode-toolkit@next
+npm install qrcode-toolkit
 ```
 
-pnpm, Yarn and Bun work the same way (`pnpm add qrcode-toolkit@next`, `yarn add qrcode-toolkit@next`, `bun add qrcode-toolkit@next`).
+pnpm, Yarn and Bun work the same way (`pnpm add qrcode-toolkit`, `yarn add qrcode-toolkit`, `bun add qrcode-toolkit`).
 
 To try the repository's latest changes instead, build and pack from source:
 
 ```bash
 git clone https://github.com/githubthinnd/qrcode-toolkit.git
-cd qrcode-toolkit && npm install && npm run build && npm pack   # writes qrcode-toolkit-0.1.0.tgz
+cd qrcode-toolkit && npm install && npm run build && npm pack   # writes qrcode-toolkit-<version>.tgz
 ```
 
 **Requirements:** Node.js `^22.12 || >=24` (ESM only; `require()` of the ESM build works on these versions) and any current browser through a bundler or native ES modules. Verified on Node.js 22.23 and 24.21; Node.js 26 is covered by the CI definition only.
@@ -93,7 +94,7 @@ matrix.get(0, 0); // true when the module at x=0, y=0 is dark
 
 `qrcode-toolkit` has no framework adapter on purpose: each integration below is a few lines around `kit.generateSync(...)`. Create the kit **once at module level**, derive the image source from your props, and render an `<img>`.
 
-> The snippets use only the documented API. They are not part of the automated test suite and have not been run inside each framework's own test tooling, so adapt them to your versions.
+> The React, Vue 3, Svelte 5 and Next.js Route Handler snippets below are executed from this README by `npm run verify:frameworks` (server-side rendering with React 19, Vue 3 and Svelte 5, and the handler called with a Web `Request`). The Angular, Astro, Nuxt and SvelteKit snippets use only the documented API but are not executed by a test; adapt them to your versions.
 
 <details>
 <summary><b>React</b> (Vite, Create React App, Remix, React Router)</summary>
@@ -764,7 +765,7 @@ Most scanners assume UTF-8 for byte data and some mishandle an ECI header. ECI i
 <details>
 <summary><b>Is it on npm?</b></summary>
 
-Yes, as a pre-release: `npm install qrcode-toolkit@next`. The `latest` tag starts with 1.0.0.
+Yes: `npm install qrcode-toolkit`. It is a 0.x pre-release, so `^0.1.0` only accepts 0.1.x updates.
 
 </details>
 

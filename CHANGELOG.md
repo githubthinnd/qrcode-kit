@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- The published package no longer ships source maps and declaration maps (they pointed at `src/`, which is not published): 102 fewer files.
+- Security policy and code of conduct name a contact address; CI actions are pinned by commit hash and updated; a release workflow publishes tagged versions with npm provenance.
+- `npm run verify:frameworks` renders the README's React, Vue 3 and Svelte 5 components on the server and calls the Next.js Route Handler against the packed tarball.
+- Issue and pull-request templates and Dependabot configuration.
+
 ## [0.1.0] - 2026-11-05
 
 First public pre-release, published under the `next` npm tag.

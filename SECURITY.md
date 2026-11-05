@@ -2,11 +2,11 @@
 
 ## Supported versions
 
-The project is pre-release (0.0.0) and not published. Once 1.0 is released, the latest minor version receives security fixes.
+The project is a pre-release (0.1.x). Security fixes are made on the latest 0.1.x release; once 1.0 is released, the latest minor version receives them.
 
 ## Reporting a vulnerability
 
-Please **do not open a public issue**. Report privately using GitHub's "Report a vulnerability" feature on the repository's Security tab. _Private vulnerability reporting must be enabled on the repository, and a dedicated contact address added here, before the first public release._
+Please **do not open a public issue**. Report privately using GitHub's "Report a vulnerability" feature on the repository's Security tab, or email **thinnd.work@gmail.com** with the subject `qrcode-toolkit security`.
 
 Include the version, a minimal reproduction, and the impact you expect. You will get an acknowledgement and a fix or mitigation plan; coordinated disclosure is appreciated.
 

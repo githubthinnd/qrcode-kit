@@ -20,4 +20,4 @@ We want this project to be a welcoming, harassment-free place to work on softwar
 
 This applies to all project spaces (issues, pull requests, discussions) and to people representing the project in public. Maintainers may edit, hide or remove contributions and may restrict participation of anyone who violates these standards.
 
-Report concerns privately to the maintainers through the repository's private contact route (GitHub private vulnerability reporting / maintainer profile). _A dedicated contact address must be added here before the first public release._
+Report concerns privately to the maintainers by email at **thinnd.work@gmail.com** (subject `qrcode-toolkit conduct`). Reports are handled confidentially.
