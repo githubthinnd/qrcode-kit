@@ -44,7 +44,7 @@ export interface RenderOptions {
 export interface SvgOutput {
   readonly kind: 'svg';
   readonly markup: string;
-  /** Edge length in modules including the quiet zone. */
+  /** Width in modules including the quiet zone (also the height for square symbols). */
   readonly modules: number;
   readonly width: number | undefined;
   readonly height: number | undefined;

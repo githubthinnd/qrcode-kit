@@ -1,5 +1,6 @@
-import type { ErrorCorrectionLevel, MaskPattern } from '../domain/model.js';
+import type { ErrorCorrectionLevel, MaskPattern, MaskScoring } from '../domain/model.js';
 import { MASK_PATTERNS, MODULE_KINDS, type ModuleKind } from '../domain/model.js';
+import { fastPenaltyScore } from './mask-score.js';
 import { alignmentPatternPositions, eccFormatBits, maskInverts, symbolSize } from './tables.js';
 
 const KIND = Object.fromEntries(MODULE_KINDS.map((k, i) => [k, i])) as Record<ModuleKind, number>;
@@ -148,8 +149,10 @@ class Canvas {
     }
   }
 
-  penaltyScore(limit: number): number {
-    return penaltyScore(this.modules, this.size, limit);
+  penaltyScore(limit: number, scoring: MaskScoring): number {
+    return scoring === 'fast'
+      ? fastPenaltyScore(this.modules, this.size, limit)
+      : penaltyScore(this.modules, this.size, limit);
   }
 }
 
@@ -241,6 +244,7 @@ export function buildLayout(
   ecc: ErrorCorrectionLevel,
   codewords: Uint8Array,
   mask: MaskPattern | undefined,
+  scoring: MaskScoring = 'standard',
 ): Layout {
   const canvas = new Canvas(version);
   canvas.drawFunctionPatterns();
@@ -252,7 +256,7 @@ export function buildLayout(
     for (const candidate of MASK_PATTERNS) {
       canvas.applyMask(candidate);
       canvas.drawFormat(candidate, ecc);
-      const penalty = canvas.penaltyScore(minPenalty);
+      const penalty = canvas.penaltyScore(minPenalty, scoring);
       if (penalty < minPenalty) {
         chosen = candidate;
         minPenalty = penalty;

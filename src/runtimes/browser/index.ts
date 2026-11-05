@@ -146,38 +146,40 @@ export function createCanvasRenderer(options: CanvasOptions = {}): RendererProvi
       sync: true,
     },
     render(matrix: QRMatrix, render: RenderOptions): CanvasOutput {
-      const modules = matrix.size + render.quietZone * 2;
-      const scale = rasterScale(modules, render.scale, render.size, DEFAULT_SCALE);
+      const modulesX = matrix.width + render.quietZone * 2;
+      const modulesY = matrix.height + render.quietZone * 2;
+      const scale = rasterScale(modulesX, render.scale, render.size, DEFAULT_SCALE);
       if (scale === undefined) {
         throw new RenderingError(
-          `The requested size is smaller than the ${String(modules)} modules of the symbol.`,
+          `The requested size is smaller than the ${String(modulesX)} modules across the symbol.`,
         );
       }
-      const edge = modules * scale;
-      if (edge * edge > render.maxPixels) {
+      const width = modulesX * scale;
+      const height = modulesY * scale;
+      if (width * height > render.maxPixels) {
         throw new RenderingError(
           `The canvas would exceed the limit of ${String(render.maxPixels)} pixels.`,
         );
       }
-      const canvas = create(edge, edge);
-      canvas.width = edge;
-      canvas.height = edge;
+      const canvas = create(width, height);
+      canvas.width = width;
+      canvas.height = height;
       const ctx = context(canvas);
       const dark = render.invert ? render.light : render.dark;
       const light = render.invert ? render.dark : render.light;
       /** Fill the runs of modules (quiet zone included) whose state equals `wanted`. */
       const fillRuns = (wanted: boolean): void => {
-        for (let y = 0; y < modules; y++) {
+        for (let y = 0; y < modulesY; y++) {
           const on = (px: number): boolean =>
             matrix.get(px - render.quietZone, y - render.quietZone) === wanted;
           let x = 0;
-          while (x < modules) {
+          while (x < modulesX) {
             if (!on(x)) {
               x++;
               continue;
             }
             let end = x;
-            while (end < modules && on(end)) end++;
+            while (end < modulesX && on(end)) end++;
             ctx.fillRect(x * scale, y * scale, (end - x) * scale, scale);
             x = end;
           }
@@ -187,14 +189,14 @@ export function createCanvasRenderer(options: CanvasOptions = {}): RendererProvi
         ctx.fillStyle = css(light);
         // An opaque dark layer hides the background, so one rectangle will do; otherwise the light
         // colour is painted only where modules are light, so translucent dark modules stay clear.
-        if (dark.a === 255) ctx.fillRect(0, 0, edge, edge);
+        if (dark.a === 255) ctx.fillRect(0, 0, width, height);
         else fillRuns(false);
       }
       if (dark.a > 0) {
         ctx.fillStyle = css(dark);
         fillRuns(true);
       }
-      return { kind: 'canvas', canvas, width: edge, height: edge };
+      return { kind: 'canvas', canvas, width, height };
     },
   };
 }

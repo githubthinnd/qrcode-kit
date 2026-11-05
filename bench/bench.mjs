@@ -65,3 +65,14 @@ console.table(
     µs: Math.round(time(() => fn(), null, 600)),
   })),
 );
+
+console.log('Mask scoring (µs per symbol, level M; "fast" is the optional bit-parallel scoring)');
+console.table(
+  Object.entries(inputs).map(([name, text]) => ({
+    input: name,
+    standard: Math.round(time(() => kit.encode({ data: text, ecc: 'M' }), null, 600)),
+    fast: Math.round(
+      time(() => kit.encode({ data: text, ecc: 'M', maskScoring: 'fast' }), null, 600),
+    ),
+  })),
+);

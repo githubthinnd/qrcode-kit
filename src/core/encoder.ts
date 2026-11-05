@@ -6,6 +6,7 @@ import {
   MIN_VERSION,
   type ErrorCorrectionLevel,
   type MaskPattern,
+  type MaskScoring,
   type SegmentInfo,
   type StructuredAppendInfo,
 } from '../domain/model.js';
@@ -38,6 +39,8 @@ export interface EncodeOptions {
   readonly mask: MaskPattern | undefined;
   /** Raise the error correction level while the data still fits in the chosen version. */
   readonly boostEcc: boolean;
+  /** How the best mask is found (default `'standard'`). */
+  readonly maskScoring?: MaskScoring | undefined;
   readonly kanji?: KanjiMapper | undefined;
 }
 
@@ -157,7 +160,13 @@ export function planDataCodewords(source: SymbolSource, options: EncodeOptions):
 export function encodeSymbol(source: SymbolSource, options: EncodeOptions): QRMatrix {
   const plan = planDataCodewords(source, options);
   const codewords = addErrorCorrectionAndInterleave(plan.dataCodewords, plan.version, plan.ecc);
-  const layout = buildLayout(plan.version, plan.ecc, codewords, options.mask);
+  const layout = buildLayout(
+    plan.version,
+    plan.ecc,
+    codewords,
+    options.mask,
+    options.maskScoring ?? 'standard',
+  );
   const sa = source.structuredAppend;
   return new QRMatrix({
     version: plan.version,

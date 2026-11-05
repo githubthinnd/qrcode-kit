@@ -31,11 +31,16 @@ const TEXTS = [
 ];
 
 /** Read an SVG from this toolkit back into a grid of colours, one cell per module. */
-function readSvg(markup: string): { modules: number; cell: (x: number, y: number) => Rgba } {
+function readSvg(markup: string): {
+  width: number;
+  height: number;
+  cell: (x: number, y: number) => Rgba;
+} {
   const viewBox = /viewBox="0 0 (\d+) (\d+)"/.exec(markup);
   expect(viewBox).not.toBeNull();
-  const modules = Number(viewBox?.[1]);
-  const grid: Rgba[] = Array.from({ length: modules * modules }, () => ({
+  const modulesX = Number(viewBox?.[1]);
+  const modulesY = Number(viewBox?.[2]);
+  const grid: Rgba[] = Array.from({ length: modulesX * modulesY }, () => ({
     r: 0,
     g: 0,
     b: 0,
@@ -67,20 +72,26 @@ function readSvg(markup: string): { modules: number; cell: (x: number, y: number
     paint(path[2], path[3], (c) => {
       for (const run of path[1].matchAll(/M(\d+) (\d+)h(\d+)v1h-\d+z/g)) {
         const [x, y, w] = [Number(run[1]), Number(run[2]), Number(run[3])];
-        for (let i = 0; i < w; i++) grid[y * modules + x + i] = c;
+        for (let i = 0; i < w; i++) grid[y * modulesX + x + i] = c;
       }
     });
   }
-  return { modules, cell: (x, y) => grid[y * modules + x] ?? { r: 0, g: 0, b: 0, a: 0 } };
+  return {
+    width: modulesX,
+    height: modulesY,
+    cell: (x, y) => grid[y * modulesX + x] ?? { r: 0, g: 0, b: 0, a: 0 },
+  };
 }
 
 function readPng(bytes: Uint8Array): {
   width: number;
+  height: number;
   pixel: (x: number, y: number) => Rgba;
 } {
   const png = PNG.sync.read(Buffer.from(bytes));
   return {
     width: png.width,
+    height: png.height,
     pixel: (x, y) => {
       const i = (y * png.width + x) * 4;
       return {
@@ -120,8 +131,15 @@ describe('rendered output shows exactly the matrix', () => {
   const int = (min: number, max: number): number => min + Math.floor(random() * (max - min + 1));
 
   it.each(Array.from({ length: 160 }, (_, i) => i))('random request %i', async () => {
-    const data = pick(TEXTS);
-    const ecc = pick(['L', 'M', 'Q', 'H'] as const);
+    const symbol = pick(['qr', 'qr', 'micro', 'rmqr'] as const);
+    // Micro QR and rMQR hold little: short text of one kind keeps every case encodable
+    const data = symbol === 'qr' ? pick(TEXTS) : pick(['1', '12345', 'HELLO', 'AB12', 'x', 'rect']);
+    const ecc =
+      symbol === 'micro'
+        ? pick(['L', 'M', 'Q'] as const)
+        : symbol === 'rmqr'
+          ? pick(['M', 'H'] as const)
+          : pick(['L', 'M', 'Q', 'H'] as const);
     const quietZone = int(0, 8);
     const invert = random() < 0.3;
     const dark = pick(PALETTE);
@@ -135,11 +153,15 @@ describe('rendered output shows exactly the matrix', () => {
       invert,
       dark: hex(dark),
       light: hex(light),
-      ...(random() < 0.4 ? { mask: int(0, 7) as 0 } : {}),
+      symbol,
+      ...(symbol !== 'rmqr' && random() < 0.4
+        ? { mask: int(0, symbol === 'micro' ? 3 : 7) as 0 }
+        : {}),
     };
     const result = await kit.generate({ ...common, format, scale });
     const { matrix } = result;
-    const modules = matrix.size + quietZone * 2;
+    const modulesX = matrix.width + quietZone * 2;
+    const modulesY = matrix.height + quietZone * 2;
     const expected = (mx: number, my: number): Rgba => {
       const isDark = matrix.get(mx - quietZone, my - quietZone);
       return isDark !== invert ? dark : light;
@@ -154,10 +176,12 @@ describe('rendered output shows exactly the matrix', () => {
     }
     if (svgText !== undefined) {
       const svg = readSvg(svgText);
-      expect(svg.modules).toBe(modules);
-      expect(svgText).toContain(`width="${String(modules * scale)}"`);
-      for (let y = 0; y < modules; y++) {
-        for (let x = 0; x < modules; x++) {
+      expect([svg.width, svg.height]).toEqual([modulesX, modulesY]);
+      expect(svgText).toContain(
+        `width="${String(modulesX * scale)}" height="${String(modulesY * scale)}"`,
+      );
+      for (let y = 0; y < modulesY; y++) {
+        for (let x = 0; x < modulesX; x++) {
           expect(
             sameColor(svg.cell(x, y), expected(x, y)),
             `svg module ${String(x)},${String(y)} ${JSON.stringify({ d: common.dark, l: common.light, invert, quietZone })}`,
@@ -171,9 +195,10 @@ describe('rendered output shows exactly the matrix', () => {
         ? (result.value as Uint8Array)
         : Uint8Array.from(Buffer.from((result.value as string).split(',')[1] ?? '', 'base64'));
     const png = readPng(bytes);
-    expect(png.width).toBe(modules * scale);
-    for (let y = 0; y < modules; y++) {
-      for (let x = 0; x < modules; x++) {
+    expect(png.width).toBe(modulesX * scale);
+    expect(png.height).toBe(modulesY * scale);
+    for (let y = 0; y < modulesY; y++) {
+      for (let x = 0; x < modulesX; x++) {
         // every pixel of the module square must carry the colour, not only its centre
         for (const [dx, dy] of [
           [0, 0],
@@ -189,20 +214,26 @@ describe('rendered output shows exactly the matrix', () => {
     }
   });
 
-  it.each([0, 1, 2, 4, 7])(
-    'text output reads back to the matrix (quiet zone %i, both polarities)',
-    async (q) => {
+  it.each(
+    (['qr', 'micro', 'rmqr'] as const).flatMap((symbol) =>
+      [0, 1, 2, 4, 7].map((q) => [symbol, q] as const),
+    ),
+  )(
+    '%s text output reads back to the matrix (quiet zone %i, both polarities)',
+    async (symbol, q) => {
       for (const invert of [false, true]) {
         const { value, matrix } = await kit.generate({
-          data: 'text check',
+          data: symbol === 'qr' ? 'text check' : '12345',
+          symbol,
           format: 'text',
           quietZone: q,
           invert,
         });
         const lines = value.split('\n');
-        const modules = matrix.size + q * 2;
-        expect(lines.length).toBe(Math.ceil(modules / 2));
-        for (const line of lines) expect(Array.from(line).length).toBe(modules);
+        const modulesX = matrix.width + q * 2;
+        const modulesY = matrix.height + q * 2;
+        expect(lines.length).toBe(Math.ceil(modulesY / 2));
+        for (const line of lines) expect(Array.from(line).length).toBe(modulesX);
         const filled = (x: number, y: number): boolean => {
           const line = lines[Math.floor(y / 2)] ?? '';
           const ch = Array.from(line)[x] ?? ' ';
@@ -210,8 +241,8 @@ describe('rendered output shows exactly the matrix', () => {
           const bottom = ch === '█' || ch === '▄';
           return y % 2 === 0 ? top : bottom;
         };
-        for (let y = 0; y < modules; y++) {
-          for (let x = 0; x < modules; x++) {
+        for (let y = 0; y < modulesY; y++) {
+          for (let x = 0; x < modulesX; x++) {
             const dark = matrix.get(x - q, y - q);
             expect(filled(x, y), `text ${String(x)},${String(y)}`).toBe(dark !== invert);
           }
@@ -299,7 +330,9 @@ describe('canvas drawing shows exactly the matrix, translucent colours included'
         const fake = compositingCanvas();
         const browserKit = createBrowserKit({ canvas: { createCanvas: fake.create } });
         const { matrix } = await browserKit.generate({
-          data: 'canvas fidelity',
+          data: '12345',
+          // a rectangular symbol, so width and height cannot be mixed up
+          symbol: 'rmqr',
           format: 'png-blob',
           scale: 3,
           quietZone: 2,
@@ -309,8 +342,9 @@ describe('canvas drawing shows exactly the matrix, translucent colours included'
           ...(route === 'bitmap' ? { providers: { renderer: 'qrcode-toolkit/bitmap' } } : {}),
         });
         const canvas = fake.last();
-        const modules = matrix.size + 4;
-        expect(canvas.width).toBe(modules * 3);
+        const modulesX = matrix.width + 4;
+        const modulesY = matrix.height + 4;
+        expect(canvas.width).toBe(modulesX * 3);
         const parse = (text: string): Rgba => {
           const n = Number.parseInt(text.slice(1), 16);
           return text.length === 9
@@ -318,8 +352,8 @@ describe('canvas drawing shows exactly the matrix, translucent colours included'
             : { r: (n >>> 16) & 255, g: (n >>> 8) & 255, b: n & 255, a: 255 };
         };
         const [dark, light] = [parse(darkText), parse(lightText)];
-        for (let y = 0; y < modules; y++) {
-          for (let x = 0; x < modules; x++) {
+        for (let y = 0; y < modulesY; y++) {
+          for (let x = 0; x < modulesX; x++) {
             const wantDark = matrix.get(x - 2, y - 2) !== invert;
             const want = wantDark ? dark : light;
             expect(

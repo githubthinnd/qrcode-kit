@@ -1,16 +1,38 @@
 import type { Charset } from '../contracts/encoder.js';
 import type { ModuleShape } from '../contracts/renderer.js';
-import type { ErrorCorrectionLevel, MaskPattern } from '../domain/model.js';
+import type {
+  ErrorCorrectionLevel,
+  MaskPattern,
+  MaskScoring,
+  SymbolType,
+} from '../domain/model.js';
 import type { Segment } from '../domain/segment.js';
 
 /** Options that control how data is turned into a QR Code symbol. */
 export interface SymbolOptions {
+  /**
+   * `'qr'` (default), `'micro'` (Micro QR Code M1–M4, tiny and square) or `'rmqr'` (rectangular
+   * Micro QR, R7x43 … R17x139). Micro QR and rMQR hold less data in less space, use a 2-module quiet
+   * zone, and have their own levels: L/M/Q (default L) and M/H (default M).
+   */
+  readonly symbol?: SymbolType;
   /** Error correction level. Default `'M'`. */
   readonly ecc?: ErrorCorrectionLevel;
-  /** An exact version (1–40) or an allowed range. Default: 1–40, smallest that fits. */
-  readonly version?: number | { readonly min?: number; readonly max?: number };
+  /**
+   * An exact version or an allowed range; default: all, smallest that fits. QR Code: 1–40. Micro QR:
+   * 1–4 or `'M1'`–`'M4'`. rMQR: 1–32 or a name such as `'R9x59'` (height × width), smallest area first.
+   */
+  readonly version?:
+    number | string | { readonly min?: number | string; readonly max?: number | string };
   /** Mask pattern 0–7, or `'auto'` (default) for the lowest-penalty mask. */
   readonly mask?: MaskPattern | 'auto';
+  /**
+   * How the best mask is found when `mask` is `'auto'` (QR Code only): `'standard'` (default) scores
+   * the eight masks with the run-length rules and picks what the reference implementations pick;
+   * `'fast'` scores them 32 modules at a time, quicker, and in rare cases chooses another equally
+   * valid mask.
+   */
+  readonly maskScoring?: MaskScoring;
   /** Raise the error correction level while the data still fits in the chosen version. Default `false`. */
   readonly boostEcc?: boolean;
   /** Character set of string data. Default `'utf-8'`. */
@@ -33,7 +55,7 @@ export interface SymbolOptions {
 
 /** Options that control how a symbol is drawn. */
 export interface AppearanceOptions {
-  /** Quiet zone in modules. Default 4 (the minimum the standard requires). */
+  /** Quiet zone in modules. Default: 4 for QR Code, 2 for Micro QR and rMQR (the minimum their standards require). */
   readonly quietZone?: number;
   /** Pixels per module. Mutually exclusive with `size`. */
   readonly scale?: number;
@@ -100,7 +122,10 @@ export interface GenerateRequest<F extends string = string>
 
 /** Request for a structured-append sequence (data split across 2–16 linked symbols). */
 export interface StructuredAppendGenerateRequest<F extends string = string>
-  extends Omit<SymbolOptions, 'eci' | 'kanji' | 'fnc1'>, AppearanceOptions, OutputOptions {
+  extends
+    Omit<SymbolOptions, 'eci' | 'kanji' | 'fnc1' | 'symbol'>,
+    AppearanceOptions,
+    OutputOptions {
   readonly data: string | Uint8Array;
   readonly format?: F;
   /** Number of symbols (2–16). Default: the smallest number whose parts all fit. */
@@ -109,6 +134,8 @@ export interface StructuredAppendGenerateRequest<F extends string = string>
 
 export const SYMBOL_OPTION_KEYS: readonly string[] = [
   'data',
+  'symbol',
+  'maskScoring',
   'ecc',
   'version',
   'mask',

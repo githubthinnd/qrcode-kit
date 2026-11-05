@@ -45,6 +45,9 @@ interface LogoPlacement {
 function placeLogo(matrix: QRMatrix, options: RenderOptions): LogoPlacement | undefined {
   const logo = options.logo;
   if (logo === undefined) return undefined;
+  if (matrix.symbol !== 'qr') {
+    throw new RenderingError('A logo is only available for QR Code symbols.');
+  }
   const n = matrix.size;
   let size = Math.max(1, Math.round(n * logo.size));
   if ((n - size) % 2 !== 0) size++; // an odd symbol keeps an odd logo, so it stays centred
@@ -125,41 +128,54 @@ function finder(x: number, y: number): string {
 }
 
 /** Gradient definition. The id is derived from the colours, so equal gradients share one id. */
-function gradientDefs(gradient: GradientSpec, modules: number): { id: string; defs: string } {
+function gradientDefs(
+  gradient: GradientSpec,
+  modulesX: number,
+  modulesY: number,
+): { id: string; defs: string } {
   const from = colorHex(gradient.from).slice(1);
   const to = colorHex(gradient.to).slice(1);
   const id = `qrg-${from}${to}${gradient.type === 'radial' ? 'r' : 'l'}${String(gradient.angle)}`;
   const stops =
     `<stop offset="0" stop-color="#${from}"${gradient.from.a < 255 ? ` stop-opacity="${opacity(gradient.from.a)}"` : ''}/>` +
     `<stop offset="1" stop-color="#${to}"${gradient.to.a < 255 ? ` stop-opacity="${opacity(gradient.to.a)}"` : ''}/>`;
-  const half = modules / 2;
+  const halfX = modulesX / 2;
+  const halfY = modulesY / 2;
   if (gradient.type === 'radial') {
     return {
       id,
-      defs: `<radialGradient id="${id}" gradientUnits="userSpaceOnUse" cx="${num(half)}" cy="${num(half)}" r="${num(half * Math.SQRT2)}">${stops}</radialGradient>`,
+      defs: `<radialGradient id="${id}" gradientUnits="userSpaceOnUse" cx="${num(halfX)}" cy="${num(halfY)}" r="${num(Math.hypot(halfX, halfY))}">${stops}</radialGradient>`,
     };
   }
   const radians = (gradient.angle * Math.PI) / 180;
   const dx = Math.cos(radians);
   const dy = Math.sin(radians);
-  const reach = half * (Math.abs(dx) + Math.abs(dy));
+  const reach = halfX * Math.abs(dx) + halfY * Math.abs(dy);
   return {
     id,
-    defs: `<linearGradient id="${id}" gradientUnits="userSpaceOnUse" x1="${num(half - dx * reach)}" y1="${num(half - dy * reach)}" x2="${num(half + dx * reach)}" y2="${num(half + dy * reach)}">${stops}</linearGradient>`,
+    defs: `<linearGradient id="${id}" gradientUnits="userSpaceOnUse" x1="${num(halfX - dx * reach)}" y1="${num(halfY - dy * reach)}" x2="${num(halfX + dx * reach)}" y2="${num(halfY + dy * reach)}">${stops}</linearGradient>`,
   };
 }
 
 /** Build the SVG document. Only numbers, validated colours and a validated data URL are written. */
 function buildSvg(matrix: QRMatrix, options: RenderOptions): SvgOutput {
-  const modules = matrix.size + options.quietZone * 2;
+  const modulesX = matrix.width + options.quietZone * 2;
+  const modulesY = matrix.height + options.quietZone * 2;
   const dark = options.invert ? options.light : options.dark;
   const light = options.invert ? options.dark : options.light;
   const shape = options.moduleShape;
   const logo = placeLogo(matrix, options);
 
-  let edge: number | undefined;
-  if (options.scale !== undefined) edge = modules * options.scale;
-  else if (options.size !== undefined) edge = options.size;
+  // `size` is the width; the height keeps the aspect ratio of the symbol (rMQR is wider than tall).
+  let edgeX: number | undefined;
+  let edgeY: number | undefined;
+  if (options.scale !== undefined) {
+    edgeX = modulesX * options.scale;
+    edgeY = modulesY * options.scale;
+  } else if (options.size !== undefined) {
+    edgeX = options.size;
+    edgeY = Math.round(((options.size * modulesY) / modulesX) * 1000) / 1000;
+  }
 
   /** A module is dark when the symbol says so and no logo covers it. */
   const isDark = (x: number, y: number): boolean =>
@@ -170,15 +186,15 @@ function buildSvg(matrix: QRMatrix, options: RenderOptions): SvgOutput {
   /** Run-length path of every module (quiet zone included) whose state equals `wanted`. */
   const runs = (wanted: boolean): string => {
     let d = '';
-    for (let y = 0; y < modules; y++) {
+    for (let y = 0; y < modulesY; y++) {
       let x = 0;
-      while (x < modules) {
+      while (x < modulesX) {
         if (stateAt(x, y) !== wanted) {
           x++;
           continue;
         }
         let end = x;
-        while (end < modules && stateAt(end, y) === wanted) end++;
+        while (end < modulesX && stateAt(end, y) === wanted) end++;
         d += `M${String(x)} ${String(y)}h${String(end - x)}v1h-${String(end - x)}z`;
         x = end;
       }
@@ -189,14 +205,18 @@ function buildSvg(matrix: QRMatrix, options: RenderOptions): SvgOutput {
   /** Rounded or dotted modules; finder patterns are drawn whole so they stay recognisable. */
   const shaped = (): string => {
     const q = options.quietZone;
-    const finderOrigins: readonly (readonly [number, number])[] = [
-      [0, 0],
-      [matrix.size - 7, 0],
-      [0, matrix.size - 7],
-    ];
+    // QR Code has three finder patterns; Micro QR and rMQR have one, in the top-left corner.
+    const finderOrigins: readonly (readonly [number, number])[] =
+      matrix.symbol === 'qr'
+        ? [
+            [0, 0],
+            [matrix.size - 7, 0],
+            [0, matrix.size - 7],
+          ]
+        : [[0, 0]];
     let d = finderOrigins.map(([fx, fy]) => finder(fx + q, fy + q)).join('');
-    for (let y = 0; y < matrix.size; y++) {
-      for (let x = 0; x < matrix.size; x++) {
+    for (let y = 0; y < matrix.height; y++) {
+      for (let x = 0; x < matrix.width; x++) {
         if (!isDark(x, y) || matrix.kind(x, y) === 'finder') continue;
         if (shape === 'dots') {
           d += circle(x + q + 0.5, y + q + 0.5, 0.42);
@@ -221,18 +241,21 @@ function buildSvg(matrix: QRMatrix, options: RenderOptions): SvgOutput {
   };
 
   const gradient =
-    options.gradient === undefined ? undefined : gradientDefs(options.gradient, modules);
+    options.gradient === undefined ? undefined : gradientDefs(options.gradient, modulesX, modulesY);
   const darkFill = gradient === undefined ? colorHex(dark) : `url(#${gradient.id})`;
   const darkOpacity =
     gradient === undefined && dark.a < 255 ? ` fill-opacity="${opacity(dark.a)}"` : '';
   const hasDark = gradient !== undefined || dark.a > 0;
   const path = hasDark ? (shape === 'square' ? runs(true) : shaped()) : '';
 
-  const size = edge === undefined ? '' : ` width="${String(edge)}" height="${String(edge)}"`;
+  const size =
+    edgeX === undefined || edgeY === undefined
+      ? ''
+      : ` width="${String(edgeX)}" height="${String(edgeY)}"`;
   // Curves need anti-aliasing; square modules stay crisp.
   const rendering = shape === 'square' ? ' shape-rendering="crispEdges"' : '';
   const parts = [
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${String(modules)} ${String(modules)}"${size}${rendering}>`,
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${String(modulesX)} ${String(modulesY)}"${size}${rendering}>`,
   ];
   if (gradient !== undefined) parts.push(`<defs>${gradient.defs}</defs>`);
   if (light.a > 0) {
@@ -241,7 +264,7 @@ function buildSvg(matrix: QRMatrix, options: RenderOptions): SvgOutput {
       // An opaque dark layer covers the background, and curved shapes show it between modules,
       // so one rectangle is the right background.
       parts.push(
-        `<rect width="${String(modules)}" height="${String(modules)}" fill="${colorHex(light)}"${fillOpacity}/>`,
+        `<rect width="${String(modulesX)}" height="${String(modulesY)}" fill="${colorHex(light)}"${fillOpacity}/>`,
       );
     } else {
       // A translucent or transparent dark module must not show the background through it, so
@@ -259,7 +282,7 @@ function buildSvg(matrix: QRMatrix, options: RenderOptions): SvgOutput {
     );
   }
   parts.push('</svg>');
-  return { kind: 'svg', markup: parts.join(''), modules, width: edge, height: edge };
+  return { kind: 'svg', markup: parts.join(''), modules: modulesX, width: edgeX, height: edgeY };
 }
 
 /** Renders a matrix as a compact SVG, optionally with rounded or dotted modules, a gradient and a logo. */

@@ -146,6 +146,9 @@ function encoderGaps(needs: Requirements['encoder'], encoder: EncoderProvider): 
     boostEcc: c.boostEcc,
     'iso-8859-1': c.charsets.includes('iso-8859-1'),
     structuredAppend: c.structuredAppend && typeof encoder.encodeStructuredAppend === 'function',
+    fastMaskScoring: (c.maskScoring ?? ['standard']).includes('fast'),
+    micro: (c.symbols ?? ['qr']).includes('micro'),
+    rmqr: (c.symbols ?? ['qr']).includes('rmqr'),
   };
   for (const need of needs) {
     if (!checks[need]) gaps.push(`encoder "${encoder.id}" does not support ${need}`);
@@ -266,7 +269,9 @@ export function createGenerator(deps: GeneratorDeps): Generator {
       }
       if (
         !(next instanceof QRMatrix) ||
-        next.size !== matrix.size ||
+        next.width !== matrix.width ||
+        next.height !== matrix.height ||
+        next.symbol !== matrix.symbol ||
         next.version !== matrix.version
       ) {
         throw new PluginError(

@@ -5,10 +5,17 @@ import { InvalidConfigurationError, InvalidInputError } from '../domain/errors.j
 import {
   ERROR_CORRECTION_LEVELS,
   MASK_PATTERNS,
+  MASK_SCORINGS,
+  MAX_MICRO_VERSION,
+  MAX_RMQR_VERSION,
   MAX_VERSION,
   MIN_VERSION,
+  RMQR_SIZES,
+  SYMBOL_TYPES,
   type ErrorCorrectionLevel,
   type MaskPattern,
+  type MaskScoring,
+  type SymbolType,
 } from '../domain/model.js';
 import type { Segment } from '../domain/segment.js';
 import { contrastRatio, luminanceOf, parseColor } from './colors.js';
@@ -35,7 +42,16 @@ export const DEFAULT_LIMITS: KitLimits = { maxInputLength: 65_536, maxPixels: 16
 /** What a request needs from the providers; checked before anything runs. */
 export interface Requirements {
   readonly encoder: readonly (
-    'eci' | 'kanji' | 'fnc1' | 'maskControl' | 'boostEcc' | 'iso-8859-1' | 'structuredAppend'
+    | 'eci'
+    | 'kanji'
+    | 'fnc1'
+    | 'maskControl'
+    | 'boostEcc'
+    | 'iso-8859-1'
+    | 'structuredAppend'
+    | 'micro'
+    | 'rmqr'
+    | 'fastMaskScoring'
   )[];
   readonly transparency: boolean;
   readonly colors: boolean;
@@ -96,41 +112,131 @@ function integerOption(value: unknown, name: string, min: number, max: number): 
   return value;
 }
 
-function resolveEcc(value: unknown): ErrorCorrectionLevel {
-  if (value === undefined) return 'M';
-  if (typeof value === 'string' && (ERROR_CORRECTION_LEVELS as readonly string[]).includes(value)) {
-    return value as ErrorCorrectionLevel;
+function resolveSymbol(value: unknown): SymbolType {
+  if (value === undefined) return 'qr';
+  if (typeof value === 'string' && (SYMBOL_TYPES as readonly string[]).includes(value)) {
+    return value as SymbolType;
   }
-  throw new InvalidInputError('Option "ecc" must be one of "L", "M", "Q", "H".', {
-    details: { option: 'ecc' },
+  throw new InvalidInputError('Option "symbol" must be "qr", "micro" or "rmqr".', {
+    details: { option: 'symbol' },
   });
 }
 
-function resolveVersions(value: SymbolOptions['version']): { min: number; max: number } {
-  if (value === undefined) return { min: MIN_VERSION, max: MAX_VERSION };
-  if (typeof value === 'number') {
-    const exact = integerOption(value, 'version', MIN_VERSION, MAX_VERSION);
+/** Default level per symbol: Micro QR is tiny, so it starts at L; QR Code and rMQR at M. */
+function resolveEcc(value: unknown, symbol: SymbolType): ErrorCorrectionLevel {
+  const allowed: readonly ErrorCorrectionLevel[] =
+    symbol === 'micro' ? ['L', 'M', 'Q'] : symbol === 'rmqr' ? ['M', 'H'] : ERROR_CORRECTION_LEVELS;
+  if (value === undefined) return symbol === 'micro' ? 'L' : 'M';
+  if (typeof value === 'string' && (allowed as readonly string[]).includes(value)) {
+    return value as ErrorCorrectionLevel;
+  }
+  const names = allowed.map((level) => `"${level}"`).join(', ');
+  throw new InvalidInputError(
+    symbol === 'qr'
+      ? 'Option "ecc" must be one of "L", "M", "Q", "H".'
+      : `Option "ecc" must be one of ${names} for ${symbol === 'micro' ? 'Micro QR Code' : 'rMQR'}.`,
+    { details: { option: 'ecc' } },
+  );
+}
+
+const VERSION_LIMITS: Readonly<Record<SymbolType, { min: number; max: number }>> = {
+  qr: { min: MIN_VERSION, max: MAX_VERSION },
+  micro: { min: 1, max: MAX_MICRO_VERSION },
+  rmqr: { min: 1, max: MAX_RMQR_VERSION },
+};
+
+/** One version bound: a number, or a name (`M3`, `R9x59`) for the symbol families that have them. */
+function versionPoint(value: unknown, symbol: SymbolType, name: string): number {
+  const { min, max } = VERSION_LIMITS[symbol];
+  if (typeof value === 'string') {
+    if (symbol === 'micro') {
+      const match = /^M([1-4])$/i.exec(value);
+      if (match?.[1] !== undefined) return Number(match[1]);
+    } else if (symbol === 'rmqr') {
+      const match = /^R(\d+)x(\d+)$/i.exec(value);
+      const index = RMQR_SIZES.findIndex(
+        ([width, height]) =>
+          match !== null && Number(match[1]) === height && Number(match[2]) === width,
+      );
+      if (index >= 0) return index + 1;
+    }
+    throw new InvalidInputError(
+      symbol === 'qr'
+        ? `Option "${name}" must be an integer from 1 to 40. Names such as "M2" or "R9x59" need symbol "micro" or "rmqr".`
+        : symbol === 'micro'
+          ? `Option "${name}" must be 1 to 4 or one of "M1", "M2", "M3", "M4".`
+          : `Option "${name}" must be 1 to 32 or a name such as "R9x59" (height × width) from the 32 rMQR sizes.`,
+      { details: { option: name } },
+    );
+  }
+  return integerOption(value, name, min, max);
+}
+
+function resolveVersions(
+  value: SymbolOptions['version'],
+  symbol: SymbolType,
+): { min: number; max: number } {
+  const limits = VERSION_LIMITS[symbol];
+  if (value === undefined) return { ...limits };
+  if (typeof value === 'number' || typeof value === 'string') {
+    const exact = versionPoint(value, symbol, 'version');
     return { min: exact, max: exact };
   }
-  const min =
-    value.min === undefined
-      ? MIN_VERSION
-      : integerOption(value.min, 'version.min', MIN_VERSION, MAX_VERSION);
-  const max =
-    value.max === undefined
-      ? MAX_VERSION
-      : integerOption(value.max, 'version.max', MIN_VERSION, MAX_VERSION);
+  const min = value.min === undefined ? limits.min : versionPoint(value.min, symbol, 'version.min');
+  const max = value.max === undefined ? limits.max : versionPoint(value.max, symbol, 'version.max');
   if (min > max) throw new InvalidInputError('Option "version": min must not exceed max.');
   return { min, max };
 }
 
-function resolveMask(value: unknown): MaskPattern | undefined {
+function resolveMask(value: unknown, symbol: SymbolType): MaskPattern | undefined {
   if (value === undefined || value === 'auto') return undefined;
-  if (typeof value === 'number' && (MASK_PATTERNS as readonly number[]).includes(value))
+  if (symbol === 'rmqr') {
+    throw new InvalidInputError(
+      'rMQR has a single mask pattern, so option "mask" must be "auto".',
+      {
+        details: { option: 'mask' },
+      },
+    );
+  }
+  const top = symbol === 'micro' ? 3 : 7;
+  if (
+    typeof value === 'number' &&
+    (MASK_PATTERNS as readonly number[]).includes(value) &&
+    value <= top
+  ) {
     return value as MaskPattern;
-  throw new InvalidInputError('Option "mask" must be "auto" or an integer from 0 to 7.', {
-    details: { option: 'mask' },
-  });
+  }
+  throw new InvalidInputError(
+    `Option "mask" must be "auto" or an integer from 0 to ${String(top)}${symbol === 'micro' ? ' for Micro QR Code' : ''}.`,
+    { details: { option: 'mask' } },
+  );
+}
+
+/** `maskScoring`: only QR Code chooses among masks by score, and only when no mask was given. */
+function resolveMaskScoring(
+  value: unknown,
+  symbol: SymbolType,
+  mask: MaskPattern | undefined,
+): MaskScoring {
+  if (value === undefined) return 'standard';
+  if (typeof value !== 'string' || !(MASK_SCORINGS as readonly string[]).includes(value)) {
+    throw new InvalidInputError('Option "maskScoring" must be "standard" or "fast".', {
+      details: { option: 'maskScoring' },
+    });
+  }
+  if (symbol !== 'qr') {
+    throw new InvalidInputError(
+      'Option "maskScoring" applies to QR Code symbols: Micro QR Code scores four masks by a fixed rule and rMQR has one mask.',
+      { details: { option: 'maskScoring' } },
+    );
+  }
+  if (mask !== undefined) {
+    throw new InvalidInputError(
+      'Option "maskScoring" has no effect when a mask is chosen with "mask"; leave "mask" on "auto".',
+      { details: { option: 'maskScoring' } },
+    );
+  }
+  return value as MaskScoring;
 }
 
 function booleanOption(value: unknown, name: string): boolean {
@@ -252,13 +358,18 @@ function resolveLogo(value: unknown): LogoSpec | undefined {
 function resolveAppearance(
   request: AppearanceOptions,
   warnings: Diagnostic[],
+  symbol: SymbolType = 'qr',
 ): { appearance: ResolvedAppearance; explicitColors: boolean } {
+  // QR Code needs a 4-module quiet zone; Micro QR and rMQR need 2.
+  const minimum = symbol === 'qr' ? 4 : 2;
   const quietZone =
-    request.quietZone === undefined ? 4 : integerOption(request.quietZone, 'quietZone', 0, 64);
-  if (quietZone < 4) {
+    request.quietZone === undefined
+      ? minimum
+      : integerOption(request.quietZone, 'quietZone', 0, 64);
+  if (quietZone < minimum) {
     warnings.push({
       code: 'QUIET_ZONE_SMALL',
-      message: `A quiet zone of ${String(quietZone)} modules is below the 4 modules the standard requires; some scanners may fail.`,
+      message: `A quiet zone of ${String(quietZone)} modules is below the ${String(minimum)} modules the standard requires; some scanners may fail.`,
     });
   }
   if (request.scale !== undefined && request.size !== undefined) {
@@ -460,6 +571,8 @@ export function normalizeSymbol(
 ): PreparedSymbol {
   const need: Requirements['encoder'][number][] = [];
   const { data } = request;
+  const symbol = resolveSymbol(request.symbol);
+  if (symbol !== 'qr') need.push(symbol);
 
   const charset = request.charset ?? 'utf-8';
   if (charset !== 'utf-8' && charset !== 'iso-8859-1') {
@@ -524,9 +637,11 @@ export function normalizeSymbol(
     throw new InvalidInputError('"data" must be a string, a Uint8Array or an array of segments.');
   }
 
-  const versions = resolveVersions(request.version);
-  const mask = resolveMask(request.mask);
+  const versions = resolveVersions(request.version, symbol);
+  const mask = resolveMask(request.mask, symbol);
   if (mask !== undefined) need.push('maskControl');
+  const maskScoring = resolveMaskScoring(request.maskScoring, symbol, mask);
+  if (maskScoring === 'fast') need.push('fastMaskScoring');
   const boostEcc = booleanOption(request.boostEcc, 'boostEcc');
   if (boostEcc) need.push('boostEcc');
 
@@ -541,14 +656,25 @@ export function normalizeSymbol(
     throw new InvalidInputError('Option "fnc1" must be "first" or { applicationIndicator }.');
   }
   if (fnc1 !== undefined) need.push('fnc1');
+  if (symbol === 'micro') {
+    const usesEci = need.includes('eci');
+    if (usesEci || fnc1 !== undefined) {
+      throw new InvalidInputError(
+        'Micro QR Code cannot carry ECI or FNC1. Use symbol "rmqr" or "qr" for that.',
+        { details: { option: usesEci ? 'eci' : 'fnc1' } },
+      );
+    }
+  }
 
   return {
     request: {
       input,
-      ecc: resolveEcc(request.ecc),
+      symbol,
+      ecc: resolveEcc(request.ecc, symbol),
       minVersion: versions.min,
       maxVersion: versions.max,
       mask,
+      maskScoring,
       boostEcc,
       fnc1,
     },
@@ -575,7 +701,16 @@ export function normalizeGenerate(
   ]);
   const warnings: Diagnostic[] = [];
   const symbol = normalizeSymbol(request, limits);
-  const { appearance, explicitColors } = resolveAppearance(request, warnings);
+  const { appearance, explicitColors } = resolveAppearance(
+    request,
+    warnings,
+    symbol.request.symbol,
+  );
+  if (appearance.logo !== undefined && symbol.request.symbol !== 'qr') {
+    throw new InvalidConfigurationError(
+      'A logo is only available for QR Code symbols: Micro QR and rMQR are too small to spare modules for one.',
+    );
+  }
   const output = resolveOutput(request);
   return {
     encode:
@@ -606,7 +741,7 @@ export function normalizeStructuredAppend(
   if (typeof request !== 'object' || request === null)
     throw new InvalidInputError('The request must be an object with a "data" property.');
   assertKnownKeys(request, [
-    ...SYMBOL_OPTION_KEYS.filter((k) => !['eci', 'kanji', 'fnc1'].includes(k)),
+    ...SYMBOL_OPTION_KEYS.filter((k) => !['eci', 'kanji', 'fnc1', 'symbol'].includes(k)),
     'symbols',
     ...APPEARANCE_OPTION_KEYS,
     ...OUTPUT_OPTION_KEYS,
@@ -624,11 +759,13 @@ export function normalizeStructuredAppend(
   }
   const symbols =
     request.symbols === undefined ? undefined : integerOption(request.symbols, 'symbols', 2, 16);
-  const versions = resolveVersions(request.version);
-  const mask = resolveMask(request.mask);
+  const versions = resolveVersions(request.version, 'qr');
+  const mask = resolveMask(request.mask, 'qr');
+  const maskScoring = resolveMaskScoring(request.maskScoring, 'qr', mask);
   const boostEcc = booleanOption(request.boostEcc, 'boostEcc');
   const need: Requirements['encoder'][number][] = ['structuredAppend'];
   if (mask !== undefined) need.push('maskControl');
+  if (maskScoring === 'fast') need.push('fastMaskScoring');
   if (boostEcc) need.push('boostEcc');
   if (charset === 'iso-8859-1') need.push('iso-8859-1');
   const { appearance, explicitColors } = resolveAppearance(request, warnings);
@@ -638,10 +775,14 @@ export function normalizeStructuredAppend(
       data,
       charset,
       symbols,
-      ecc: request.ecc === undefined && request.logo !== undefined ? 'H' : resolveEcc(request.ecc),
+      ecc:
+        request.ecc === undefined && request.logo !== undefined
+          ? 'H'
+          : resolveEcc(request.ecc, 'qr'),
       minVersion: versions.min,
       maxVersion: versions.max,
       mask,
+      maskScoring,
       boostEcc,
     },
     appearance,

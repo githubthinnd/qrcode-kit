@@ -1,6 +1,7 @@
 import type { Segment } from '../domain/segment.js';
 import { kanjiValue, type KanjiMapper } from './kanji.js';
-import { charCountBits } from './tables.js';
+import { qrFraming, type Framing } from './framing.js';
+import { UnsupportedDataError } from '../domain/errors.js';
 import {
   alphanumericValue,
   encodeText,
@@ -41,16 +42,32 @@ export function segmentText(
   range: VersionRange,
   options: SegmentationOptions,
 ): Segment[] {
+  return segmentTextWith(text, qrFraming(REPRESENTATIVE_VERSION[range]), options);
+}
+
+/**
+ * The same optimisation for any symbol: `framing` says which modes exist and what their headers
+ * cost (Micro QR and rMQR have fewer modes and different count fields than QR Code).
+ */
+export function segmentTextWith(
+  text: string,
+  framing: Framing,
+  options: SegmentationOptions,
+): Segment[] {
   const chars = toCodePoints(text);
   const n = chars.length;
   if (n === 0) return [];
 
-  const version = REPRESENTATIVE_VERSION[range];
+  const headerOf = (name: (typeof MODE_NAMES)[number]): number => {
+    const indicator = framing.mode(name);
+    const width = framing.count(name);
+    return indicator === undefined || width === undefined ? INF : (indicator.bits + width) * 6;
+  };
   const header: readonly number[] = [
-    (4 + charCountBits('byte', version)) * 6,
-    (4 + charCountBits('alphanumeric', version)) * 6,
-    (4 + charCountBits('numeric', version)) * 6,
-    (4 + charCountBits('kanji', version)) * 6,
+    headerOf('byte'),
+    headerOf('alphanumeric'),
+    headerOf('numeric'),
+    headerOf('kanji'),
   ];
 
   const kanjiMapper = options.kanji;
@@ -116,6 +133,9 @@ export function segmentText(
     }
   }
 
+  if (best === INF) {
+    throw new UnsupportedDataError('The text cannot be written in any mode this symbol offers.');
+  }
   const assigned: ModeIndex[] = new Array<ModeIndex>(n).fill(0);
   for (let i = n - 1; i >= 0; i--) {
     assigned[i] = mode;

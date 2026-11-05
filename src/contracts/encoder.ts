@@ -1,5 +1,11 @@
 import type { QRMatrix } from '../domain/matrix.js';
-import type { ErrorCorrectionLevel, MaskPattern, SegmentMode } from '../domain/model.js';
+import type {
+  ErrorCorrectionLevel,
+  MaskPattern,
+  MaskScoring,
+  SegmentMode,
+  SymbolType,
+} from '../domain/model.js';
 import type { Segment } from '../domain/segment.js';
 import type { MaybePromise, ProviderBase } from './common.js';
 
@@ -27,11 +33,16 @@ export type EncodeInput =
 /** Fully resolved encoder request: every field has a value, no defaults are applied downstream. */
 export interface EncodeRequest {
   readonly input: EncodeInput;
+  /** QR Code, Micro QR Code or rMQR. */
+  readonly symbol: SymbolType;
   readonly ecc: ErrorCorrectionLevel;
+  /** Version bounds in the numbering of `symbol`: QR 1–40, Micro QR 1–4 (M1–M4), rMQR 1–32. */
   readonly minVersion: number;
   readonly maxVersion: number;
   /** `undefined` = choose automatically. */
   readonly mask: MaskPattern | undefined;
+  /** How the best mask is found when `mask` is `undefined`; QR Code only. */
+  readonly maskScoring: MaskScoring;
   readonly boostEcc: boolean;
   readonly fnc1:
     | { readonly position: 'first' }
@@ -48,6 +59,7 @@ export interface StructuredAppendRequest {
   readonly minVersion: number;
   readonly maxVersion: number;
   readonly mask: MaskPattern | undefined;
+  readonly maskScoring: MaskScoring;
   readonly boostEcc: boolean;
 }
 
@@ -57,8 +69,12 @@ export interface EncoderCapabilities {
   readonly eci: boolean;
   readonly fnc1: boolean;
   readonly structuredAppend: boolean;
+  /** Symbol families it can produce. Default `['qr']`: QR Code is what every encoder makes. */
+  readonly symbols?: readonly SymbolType[];
   /** Can honour an explicit mask pattern. */
   readonly maskControl: boolean;
+  /** Mask scoring strategies it implements. Default `['standard']`. */
+  readonly maskScoring?: readonly MaskScoring[];
   readonly boostEcc: boolean;
   /** Never returns a promise. */
   readonly sync: boolean;

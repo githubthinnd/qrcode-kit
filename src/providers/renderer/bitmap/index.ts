@@ -9,36 +9,39 @@ export const BITMAP_RENDERER_ID = 'qrcode-toolkit/bitmap';
 const DEFAULT_SCALE = 8;
 
 function buildBitmap(matrix: QRMatrix, options: RenderOptions): BitmapOutput {
-  const modules = matrix.size + options.quietZone * 2;
-  const scale = rasterScale(modules, options.scale, options.size, DEFAULT_SCALE);
+  // `size` is the width of the image; rMQR symbols are wider than they are tall.
+  const modulesX = matrix.width + options.quietZone * 2;
+  const modulesY = matrix.height + options.quietZone * 2;
+  const scale = rasterScale(modulesX, options.scale, options.size, DEFAULT_SCALE);
   if (scale === undefined) {
     throw new RenderingError(
-      `The requested size of ${String(options.size)} px is smaller than the ${String(modules)} modules of the symbol; at least ${String(modules)} px are needed.`,
-      { details: { size: options.size ?? 0, modules } },
+      `The requested size of ${String(options.size)} px is smaller than the ${String(modulesX)} modules across the symbol; at least ${String(modulesX)} px are needed.`,
+      { details: { size: options.size ?? 0, modules: modulesX } },
     );
   }
-  const edge = modules * scale;
-  if (edge * edge > options.maxPixels) {
+  const width = modulesX * scale;
+  const height = modulesY * scale;
+  if (width * height > options.maxPixels) {
     throw new RenderingError(
-      `The image would be ${String(edge)}×${String(edge)} px, which exceeds the limit of ${String(options.maxPixels)} pixels. Lower "scale"/"size" or raise the kit's maxPixels limit.`,
-      { details: { edge, maxPixels: options.maxPixels } },
+      `The image would be ${String(width)}×${String(height)} px, which exceeds the limit of ${String(options.maxPixels)} pixels. Lower "scale"/"size" or raise the kit's maxPixels limit.`,
+      { details: { width, height, maxPixels: options.maxPixels } },
     );
   }
 
-  const pixels = new Uint8Array(edge * edge);
-  const row = new Uint8Array(edge);
-  for (let my = 0; my < modules; my++) {
+  const pixels = new Uint8Array(width * height);
+  const row = new Uint8Array(width);
+  for (let my = 0; my < modulesY; my++) {
     const y = my - options.quietZone;
-    for (let mx = 0; mx < modules; mx++) {
+    for (let mx = 0; mx < modulesX; mx++) {
       const dark = matrix.get(mx - options.quietZone, y) ? 1 : 0;
       row.fill(dark, mx * scale, (mx + 1) * scale);
     }
-    for (let dy = 0; dy < scale; dy++) pixels.set(row, (my * scale + dy) * edge);
+    for (let dy = 0; dy < scale; dy++) pixels.set(row, (my * scale + dy) * width);
   }
   return {
     kind: 'bitmap',
-    width: edge,
-    height: edge,
+    width,
+    height,
     pixels,
     dark: options.invert ? options.light : options.dark,
     light: options.invert ? options.dark : options.light,

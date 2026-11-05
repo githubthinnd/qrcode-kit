@@ -3,7 +3,7 @@ import type { SegmentInfo, SegmentMode } from '../domain/model.js';
 import type { Segment } from '../domain/segment.js';
 import type { BitBuffer } from './bit-buffer.js';
 import { kanjiValue, type KanjiMapper } from './kanji.js';
-import { MODE_BITS, charCountBits } from './tables.js';
+import { qrFraming, type Framing } from './framing.js';
 import { alphanumericValue, isDigit, toCodePoints } from './text.js';
 
 /** A segment validated and converted to the values that go into the bit stream. */
@@ -95,15 +95,17 @@ export function prepareSegment(segment: Segment, kanji: KanjiMapper | undefined)
   }
 }
 
-/** Bits a prepared segment occupies at `version`, or `Infinity` if its count does not fit. */
-export function segmentBits(segment: PreparedSegment, version: number): number {
+/** Bits a prepared segment occupies under `framing`, or `Infinity` if it cannot be carried. */
+export function segmentBitsIn(segment: PreparedSegment, framing: Framing): number {
+  const indicator = framing.mode(segment.mode);
+  if (indicator === undefined) return Infinity;
   switch (segment.mode) {
     case 'numeric':
     case 'alphanumeric':
     case 'byte':
     case 'kanji': {
-      const width = charCountBits(segment.mode, version);
-      if (segment.count >= 1 << width) return Infinity;
+      const width = framing.count(segment.mode);
+      if (width === undefined || segment.count >= 1 << width) return Infinity;
       const n = segment.count;
       const payload =
         segment.mode === 'numeric'
@@ -113,23 +115,32 @@ export function segmentBits(segment: PreparedSegment, version: number): number {
             : segment.mode === 'byte'
               ? n * 8
               : n * 13;
-      return 4 + width + payload;
+      return indicator.bits + width + payload;
     }
     case 'eci':
-      return 4 + (segment.parameter < 128 ? 8 : segment.parameter < 16384 ? 16 : 24);
+      return indicator.bits + (segment.parameter < 128 ? 8 : segment.parameter < 16384 ? 16 : 24);
     case 'fnc1-first':
-      return 4;
+      return indicator.bits;
     case 'fnc1-second':
-      return 12;
+      return indicator.bits + 8;
   }
 }
 
-/** Append a prepared segment to the bit stream. */
-export function writeSegment(segment: PreparedSegment, version: number, out: BitBuffer): void {
+/** Bits a prepared segment occupies at QR `version`, or `Infinity` if its count does not fit. */
+export function segmentBits(segment: PreparedSegment, version: number): number {
+  return segmentBitsIn(segment, qrFraming(version));
+}
+
+/** Append a prepared segment to the bit stream under `framing`. */
+export function writeSegmentIn(segment: PreparedSegment, framing: Framing, out: BitBuffer): void {
+  const indicator = framing.mode(segment.mode);
+  if (indicator === undefined) {
+    throw new InvalidInputError(`This symbol cannot carry ${segment.mode} segments.`);
+  }
+  out.append(indicator.value, indicator.bits);
   switch (segment.mode) {
     case 'numeric': {
-      out.append(MODE_BITS.numeric, 4);
-      out.append(segment.count, charCountBits('numeric', version));
+      out.append(segment.count, framing.count('numeric') ?? 0);
       const v = segment.values;
       let i = 0;
       for (; i + 3 <= v.length; i += 3)
@@ -139,8 +150,7 @@ export function writeSegment(segment: PreparedSegment, version: number, out: Bit
       return;
     }
     case 'alphanumeric': {
-      out.append(MODE_BITS.alphanumeric, 4);
-      out.append(segment.count, charCountBits('alphanumeric', version));
+      out.append(segment.count, framing.count('alphanumeric') ?? 0);
       const v = segment.values;
       let i = 0;
       for (; i + 2 <= v.length; i += 2) out.append((v[i] ?? 0) * 45 + (v[i + 1] ?? 0), 11);
@@ -148,19 +158,16 @@ export function writeSegment(segment: PreparedSegment, version: number, out: Bit
       return;
     }
     case 'byte': {
-      out.append(MODE_BITS.byte, 4);
-      out.append(segment.count, charCountBits('byte', version));
+      out.append(segment.count, framing.count('byte') ?? 0);
       for (const value of Array.from(segment.values)) out.append(value, 8);
       return;
     }
     case 'kanji': {
-      out.append(MODE_BITS.kanji, 4);
-      out.append(segment.count, charCountBits('kanji', version));
+      out.append(segment.count, framing.count('kanji') ?? 0);
       for (const value of Array.from(segment.values)) out.append(value, 13);
       return;
     }
     case 'eci': {
-      out.append(MODE_BITS.eci, 4);
       const a = segment.parameter;
       if (a < 128) out.append(a, 8);
       else if (a < 16384) out.append((0b10 << 14) | a, 16);
@@ -168,13 +175,16 @@ export function writeSegment(segment: PreparedSegment, version: number, out: Bit
       return;
     }
     case 'fnc1-first':
-      out.append(MODE_BITS.fnc1First, 4);
       return;
     case 'fnc1-second':
-      out.append(MODE_BITS.fnc1Second, 4);
       out.append(segment.parameter, 8);
       return;
   }
+}
+
+/** Append a prepared segment to the bit stream of QR `version`. */
+export function writeSegment(segment: PreparedSegment, version: number, out: BitBuffer): void {
+  writeSegmentIn(segment, qrFraming(version), out);
 }
 
 export const describeSegment = (segment: PreparedSegment, version: number): SegmentInfo => ({

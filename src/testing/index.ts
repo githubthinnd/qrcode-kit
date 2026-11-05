@@ -96,6 +96,7 @@ const rows = (m: QRMatrix): string =>
 
 const sampleRequest = (overrides: Partial<EncodeRequest> = {}): EncodeRequest =>
   Object.freeze({
+    symbol: 'qr',
     input: Object.freeze({
       kind: 'text',
       text: 'https://example.com/conformance',
@@ -107,6 +108,7 @@ const sampleRequest = (overrides: Partial<EncodeRequest> = {}): EncodeRequest =>
     minVersion: 1,
     maxVersion: 40,
     mask: undefined,
+    maskScoring: 'standard',
     boostEcc: false,
     fnc1: undefined,
     ...overrides,
@@ -206,6 +208,36 @@ export async function checkEncoderProvider(provider: EncoderProvider): Promise<C
             },
           }),
         );
+      },
+    ],
+    [
+      'honours the mask scoring strategies it claims',
+      async () => {
+        for (const maskScoring of provider.capabilities.maskScoring ?? ['standard']) {
+          const m = await call(sampleRequest({ maskScoring }));
+          const reference = await call(sampleRequest());
+          ensure(
+            m.version === reference.version && m.ecc === reference.ecc,
+            `maskScoring "${maskScoring}" must not change the version or level`,
+          );
+        }
+      },
+    ],
+    [
+      'produces the symbol families it claims',
+      async () => {
+        for (const symbol of provider.capabilities.symbols ?? ['qr']) {
+          const request = sampleRequest({
+            symbol,
+            ecc: symbol === 'micro' ? 'L' : 'M',
+            minVersion: 1,
+            maxVersion: symbol === 'micro' ? 4 : symbol === 'rmqr' ? 32 : 40,
+            input: { kind: 'text', text: '123', charset: 'utf-8', eci: false, kanji: false },
+          });
+          const m = await call(request);
+          ensure(m.symbol === symbol, `asked for a ${symbol} symbol but got "${m.symbol}"`);
+          ensure(m.width > 0 && m.height > 0, 'the matrix needs a width and a height');
+        }
       },
     ],
     [
