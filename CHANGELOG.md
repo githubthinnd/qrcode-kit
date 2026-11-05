@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-11-05
+
+First public pre-release, published under the `next` npm tag.
+
 ### Added
 
 - QR Code Model 2 encoder written from scratch: versions 1–40, levels L/M/Q/H, numeric / alphanumeric / byte / Kanji modes, ECI, FNC1, structured append, size-optimal automatic segmentation, automatic and fixed masks.

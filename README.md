@@ -21,7 +21,7 @@ Written in TypeScript, works at build time too · SVG, PNG, canvas and Blob outp
 
 `qrcode-toolkit` generates **QR Codes (Model 2, versions 1–40)** in the browser, on the server and at build time, from one small typed API. The encoder, the SVG and bitmap renderers and the PNG writer are all written in this repository. There is **nothing to install besides the package itself**, and every piece of output is checked against independent QR implementations and decoders.
 
-> **Status: pre-release (0.0.0), not on npm yet.** The API may still change before 1.0, and the package is marked `private` until the owner authorises publishing. The commands below that say `npm install qrcode-toolkit` apply from the first release; until then follow [Install from source](#install).
+> **Status: pre-release (0.1.0), published under the npm `next` tag.** The API may still change before 1.0. Install with `npm install qrcode-toolkit@next`; a plain `npm install qrcode-toolkit` will resolve once 1.0.0 is released.
 
 ## Why qrcode-toolkit
 
@@ -38,20 +38,16 @@ Written in TypeScript, works at build time too · SVG, PNG, canvas and Blob outp
 ## Install
 
 ```bash
-npm install qrcode-toolkit      # from the first release
+npm install qrcode-toolkit@next
 ```
 
-Until it is published, build and pack from this repository and install the tarball into your project:
+pnpm, Yarn and Bun work the same way (`pnpm add qrcode-toolkit@next`, `yarn add qrcode-toolkit@next`, `bun add qrcode-toolkit@next`).
+
+To try the repository's latest changes instead, build and pack from source:
 
 ```bash
 git clone https://github.com/githubthinnd/qrcode-toolkit.git
-cd qrcode-toolkit
-npm install
-npm run build
-npm pack                       # writes qrcode-toolkit-0.0.0.tgz
-
-# in your own project
-npm install /path/to/qrcode-toolkit-0.0.0.tgz
+cd qrcode-toolkit && npm install && npm run build && npm pack   # writes qrcode-toolkit-0.1.0.tgz
 ```
 
 **Requirements:** Node.js `^22.12 || >=24` (ESM only; `require()` of the ESM build works on these versions) and any current browser through a bundler or native ES modules. Verified on Node.js 22.23 and 24.21; Node.js 26 is covered by the CI definition only.
@@ -768,7 +764,7 @@ Most scanners assume UTF-8 for byte data and some mishandle an ECI header. ECI i
 <details>
 <summary><b>Is it on npm?</b></summary>
 
-Not yet. Until the first release, [install from source](#install).
+Yes, as a pre-release: `npm install qrcode-toolkit@next`. The `latest` tag starts with 1.0.0.
 
 </details>
 

@@ -33,8 +33,10 @@ describe('package manifest invariants', () => {
     expect(manifest['main']).toBeUndefined();
   });
 
-  it('is private until the owner explicitly authorises publishing', () => {
-    expect(manifest['private']).toBe(true);
+  it('is publishable, public, and goes to the "next" tag until 1.0', () => {
+    expect(manifest['private']).toBeUndefined();
+    expect(manifest['publishConfig']).toEqual({ access: 'public', tag: 'next' });
+    expect(manifest['scripts']).toMatchObject({ prepublishOnly: 'npm run check' });
   });
 
   it('declares the supported Node range', () => {

@@ -1,7 +1,6 @@
 {
   "name": "qrcode-toolkit",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
   "description": "Zero-dependency QR code generator for JavaScript and TypeScript: SVG, PNG, Kanji, ECI, GS1 and structured append. Works in Node.js, browsers, React, Next.js, Vue, Nuxt, Svelte, Angular and Astro.",
   "keywords": [
     "qrcode",
@@ -70,6 +69,10 @@
     },
     "./package.json": "./package.json"
   },
+  "publishConfig": {
+    "access": "public",
+    "tag": "next"
+  },
   "files": [
     "dist",
     "README.md",
@@ -91,6 +94,7 @@
     "arch": "depcruise src --config .dependency-cruiser.cjs",
     "verify:package": "node scripts/verify-package.mjs",
     "check": "npm run format:check && npm run lint && npm run typecheck && npm run arch && npm run test && npm run build && npm run verify:package",
+    "prepublishOnly": "npm run check",
     "playground": "npm run playground:build && node playground/serve.mjs",
     "playground:build": "npm run build && node scripts/build-playground.mjs",
     "playground:serve": "node playground/serve.mjs",
