@@ -109,6 +109,7 @@ try {
       'dist/browser.js',
       'dist/testing.js',
       'dist/kanji.js',
+      'dist/http.js',
       'dist/bundles/qrcode-toolkit.min.js',
       'dist/bundles/qrcode-toolkit.esm.min.js',
       'THIRD_PARTY_NOTICES.md',
@@ -179,6 +180,7 @@ import { createBrowserKit } from 'qrcode-toolkit/browser';
 import { checkExporterProvider, assertConformance } from 'qrcode-toolkit/testing';
 import { createSvgExporter, createQRCodeKit } from 'qrcode-toolkit';
 import { createJisX0208KanjiMapper } from 'qrcode-toolkit/kanji';
+import { createQRCodeHandler } from 'qrcode-toolkit/http';
 
 // the browser entry loads under Node without any DOM and only fails when a canvas is really needed
 if (typeof globalThis.document !== 'undefined') throw new Error('unexpected DOM');
@@ -200,6 +202,12 @@ assertConformance(await checkExporterProvider(createSvgExporter()));
 const kit = createQRCodeKit({ kanji: createJisX0208KanjiMapper() });
 const matrix = kit.encode({ data: '日本語の漢字', kanji: true });
 if (matrix.segments[0].mode !== 'kanji') throw new Error('kanji mode not used');
+
+// the HTTP handler answers a Fetch API request and refuses a bad one with a reason
+const handler = createQRCodeHandler();
+const image = await handler(new Request('https://example.com/qr?text=hi'));
+if (image.status !== 200 || image.headers.get('content-type') !== 'image/png') throw new Error('handler did not return a PNG');
+if ((await handler(new Request('https://example.com/qr'))).status !== 400) throw new Error('handler accepted a request without text');
 `,
   );
   check('node, browser and testing entries work from the tarball', () =>

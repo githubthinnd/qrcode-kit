@@ -12,7 +12,7 @@ Written in TypeScript, works at build time too · SVG, PNG, canvas and Blob outp
 [![CI](https://github.com/githubthinnd/qrcode-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/githubthinnd/qrcode-toolkit/actions/workflows/ci.yml)
 ![Status: pre-release](https://img.shields.io/badge/status-pre--release-ef4444.svg)
 
-[Quick start](#quick-start) · [Framework guides](#framework-guides) · [Cookbook](#cookbook) · [API](#api-reference) · [Playground](#playground) · [FAQ](#faq)
+[Quick start](#quick-start) · [Image endpoint](#image-endpoint) · [Framework guides](#framework-guides) · [Cookbook](#cookbook) · [API](#api-reference) · [Playground](#playground) · [FAQ](#faq)
 
 <img src="assets/hero.svg" alt="qrcode-toolkit: QR codes for any JS framework, browser, Node.js and SSR" width="860" />
 
@@ -91,6 +91,61 @@ matrix.get(0, 0); // true when the module at x=0, y=0 is dark
 | A terminal or log                              | `text`                                    |
 | Custom drawing                                 | `kit.encode(...)` and read the `QRMatrix` |
 
+## Image endpoint
+
+Many sites want `<img src="/api/qr?text=https://example.com">`. `createQRCodeHandler` is that endpoint, ready made. It takes a standard `Request` and returns a standard `Response`, so the same function works in **Next.js, SvelteKit, Astro, Remix / React Router, Hono, Nuxt** and anything else built on the Fetch API. It adds no dependencies and no setup.
+
+```ts
+import { createQRCodeHandler } from 'qrcode-toolkit/http';
+
+export const GET = createQRCodeHandler();
+```
+
+Put that where your framework keeps its API routes, then open `/api/qr?text=hello`:
+
+| Framework            | File                           | Code                                                                                             |
+| -------------------- | ------------------------------ | ------------------------------------------------------------------------------------------------ |
+| Next.js (App Router) | `app/api/qr/route.ts`          | `export const GET = createQRCodeHandler();`                                                      |
+| SvelteKit            | `src/routes/api/qr/+server.ts` | `const h = createQRCodeHandler(); export const GET = ({ request }) => h(request);`               |
+| Astro                | `src/pages/api/qr.ts`          | `const h = createQRCodeHandler(); export const GET = ({ request }) => h(request);`               |
+| Remix / React Router | a route with a `loader`        | `const h = createQRCodeHandler(); export const loader = ({ request }) => h(request);`            |
+| Hono                 | your app                       | `const h = createQRCodeHandler(); app.get('/qr', (c) => h(c.req.raw));`                          |
+| Nuxt                 | `server/api/qr.get.ts`         | `const h = createQRCodeHandler(); export default defineEventHandler((e) => h(toWebRequest(e)));` |
+
+**What a visitor can ask for**
+
+| Query parameter | Example                 | Meaning                                                   |
+| --------------- | ----------------------- | --------------------------------------------------------- |
+| `text`          | `?text=hello`           | **Required.** What the code contains                      |
+| `format`        | `format=svg`            | `png` (default) or `svg`                                  |
+| `size`          | `size=300`              | Image width in pixels (at most 1 024)                     |
+| `ecc`           | `ecc=Q`                 | Error correction: `L`, `M`, `Q` or `H`                    |
+| `dark`, `light` | `dark=1e1b4b&light=fff` | Colours; the `#` is optional                              |
+| `margin`        | `margin=2`              | Quiet zone in modules (0–16)                              |
+| `shape`         | `shape=rounded`         | `square`, `rounded` or `dots`; asking for one selects SVG |
+
+**Safe by default.** The text is limited to 1 000 characters, the size to 1 024 px, and unknown parameters are refused with a plain-text reason instead of being ignored. A request that cannot be served gets a clear status: `400` for a mistake in the request (with the reason), `422` for content that is too long or cannot be encoded, `405` for anything but GET and HEAD. Successful responses are cacheable for a day and carry `X-Content-Type-Options: nosniff`; SVG responses also carry a restrictive `Content-Security-Policy`. The message of an error never contains your text.
+
+**Options**
+
+```ts
+createQRCodeHandler({
+  maxLength: 500, // longest text, in characters (default 1000)
+  maxSize: 512, // largest `size` (default 1024)
+  formats: ['svg'], // what `format` may be; the first is the default (default ['png', 'svg'])
+  allow: ['size'], // which parameters visitors may use (default: all)
+  defaults: { ecc: 'Q', dark: '#312e81', moduleShape: 'rounded' }, // applied to every image
+  ignoreParams: ['v'], // accepted and ignored, e.g. cache busters
+  param: 'q', // use ?q=... instead of ?text=...
+  cacheControl: 'public, max-age=3600', // default: one day, immutable
+  kit: myKit, // your own kit (custom providers, limits)
+});
+```
+
+`defaults` are the settings you control (brand colours, error correction); `allow` decides what visitors may change. To lock everything, use `allow: []`.
+
+Express and Fastify have their own request objects; use the [Node.js servers](#framework-guides) example there. The handler uses only the Fetch API, so it is meant for other runtimes too, but only Node.js is tested.
+
 ## Framework guides
 
 ### Ready-made packages
@@ -120,7 +175,7 @@ Every package accepts all `qrcode-toolkit` options as props, renders the same ma
 
 The guides below show the same integrations without a package. Create the kit **once at module level**, derive the image source from your props, and render an `<img>`.
 
-> The React, Vue 3, Svelte 5 and Next.js Route Handler snippets below are executed from this README by `npm run verify:frameworks` (server-side rendering with React 19, Vue 3 and Svelte 5, and the handler called with a Web `Request`); so are the packed adapter packages, including Angular's with Angular SSR. The copy-paste Angular, Astro, Nuxt and SvelteKit snippets use only the documented API but are not executed by a test; adapt them to your versions.
+> The React, Vue 3, Svelte 5 and Next.js Route Handler (`createQRCodeHandler`) snippets below are executed from this README by `npm run verify:frameworks` (server-side rendering with React 19, Vue 3 and Svelte 5, and the handler called with a Web `Request`); so are the packed adapter packages, including Angular's with Angular SSR. The copy-paste Angular, Astro, Nuxt and SvelteKit snippets use only the documented API but are not executed by a test; adapt them to your versions.
 
 <details>
 <summary><b>React</b> (Vite, Create React App, Remix, React Router)</summary>
@@ -193,31 +248,14 @@ export default async function SharePage() {
 
 **2. Client Component.** For a value that changes in the browser, use the React component above and add `'use client'` at the top of the file.
 
-**3. Route Handler.** An image endpoint such as `/api/qr?text=...`:
+**3. Route Handler.** An image endpoint, `/api/qr?text=...`, in three lines (see [Image endpoint](#image-endpoint)):
 
 ```ts
 // app/api/qr/route.ts
-import { createNodeKit } from 'qrcode-toolkit/node';
+import { createQRCodeHandler } from 'qrcode-toolkit/http';
 
-export const runtime = 'nodejs'; // the /node entry needs Node.js APIs, so not the edge runtime
-
-const kit = createNodeKit();
-
-export async function GET(request: Request) {
-  const text = new URL(request.url).searchParams.get('text');
-  if (!text || text.length > 1000) return new Response('Invalid "text"', { status: 400 });
-  try {
-    const { value } = await kit.generate({ data: text, format: 'png-buffer', scale: 8 });
-    return new Response(new Uint8Array(value), {
-      headers: { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=86400, immutable' },
-    });
-  } catch {
-    return new Response('This text cannot be encoded', { status: 422 });
-  }
-}
+export const GET = createQRCodeHandler();
 ```
-
-Always bound untrusted input yourself (the example allows 1 000 characters); the library's own limit is 65 536.
 
 **Pages Router:** use `getServerSideProps`/`getStaticProps` to call `createQRCode` and pass the data URL as a prop, or use the React component.
 
@@ -305,24 +343,16 @@ export function useQrCode(value: MaybeRefOrGetter<string>, size = 192) {
 }
 ```
 
-**3. Server route.** `GET /api/qr?text=...` returns a PNG:
+**3. Server route.** `GET /api/qr?text=...` returns an image (see [Image endpoint](#image-endpoint)):
 
 ```ts
 // server/api/qr.get.ts
-import { createNodeKit } from 'qrcode-toolkit/node';
+import { createQRCodeHandler } from 'qrcode-toolkit/http';
 
-const kit = createNodeKit();
+const handler = createQRCodeHandler();
 
-export default defineEventHandler(async (event) => {
-  const { text } = getQuery(event);
-  if (typeof text !== 'string' || text.length === 0 || text.length > 1000) {
-    throw createError({ statusCode: 400, statusMessage: 'Invalid "text"' });
-  }
-  const { value } = await kit.generate({ data: text, format: 'png-buffer', scale: 8 });
-  setHeader(event, 'Content-Type', 'image/png');
-  setHeader(event, 'Cache-Control', 'public, max-age=86400');
-  return value; // a Buffer; Nitro sends it as binary
-});
+// toWebRequest is h3's converter (auto-imported by Nitro); with h3 v2 pass `event.req` instead
+export default defineEventHandler((event) => handler(toWebRequest(event)));
 ```
 
 Prerendering works too: the component and the route only use synchronous, deterministic calls.
@@ -362,27 +392,17 @@ Prerendering works too: the component and the route only use synchronous, determ
 
 On **Svelte 4** replace `$props()` with `export let value: string;` and `$derived` with a reactive statement (`$: src = ...`).
 
-**SvelteKit endpoint** for `/api/qr?text=...`:
+**SvelteKit endpoint** for `/api/qr?text=...` (see [Image endpoint](#image-endpoint)):
 
 ```ts
 // src/routes/api/qr/+server.ts
-import { error } from '@sveltejs/kit';
-import { createNodeKit } from 'qrcode-toolkit/node';
+import { createQRCodeHandler } from 'qrcode-toolkit/http';
 import type { RequestHandler } from './$types';
 
-const kit = createNodeKit();
+const handler = createQRCodeHandler();
 
-export const GET: RequestHandler = async ({ url }) => {
-  const text = url.searchParams.get('text');
-  if (!text || text.length > 1000) error(400, 'Invalid "text"');
-  const { value } = await kit.generate({ data: text, format: 'png-buffer', scale: 8 });
-  return new Response(new Uint8Array(value), {
-    headers: { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=86400' },
-  });
-};
+export const GET: RequestHandler = ({ request }) => handler(request);
 ```
-
-Use an adapter that runs Node.js (`adapter-node`, or a Node-based serverless target) for this endpoint, not an edge runtime.
 
 </details>
 
@@ -714,6 +734,7 @@ Unknown options and options the selected providers cannot honour raise an error;
 | `qrcode-toolkit`         | `createQRCode`, `createQRCodeKit`, `segment`, `QRMatrix`, error classes, provider contracts and built-ins |
 | `qrcode-toolkit/node`    | `createNodeKit`: Buffer and confined file exporters                                                       |
 | `qrcode-toolkit/browser` | `createBrowserKit`: canvas renderer and PNG / JPEG / WebP Blob exporters. Touches no DOM API on import    |
+| `qrcode-toolkit/http`    | `createQRCodeHandler`: a ready-made `/qr?text=...` image endpoint for Fetch-API frameworks                |
 | `qrcode-toolkit/kanji`   | `createJisX0208KanjiMapper`: built-in Kanji table, about 21 kB, bundled only when imported                |
 | `qrcode-toolkit/testing` | Conformance checks for provider authors                                                                   |
 

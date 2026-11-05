@@ -61,6 +61,10 @@
       "types": "./dist/browser.d.ts",
       "default": "./dist/browser.js"
     },
+    "./http": {
+      "types": "./dist/http.d.ts",
+      "default": "./dist/http.js"
+    },
     "./testing": {
       "types": "./dist/testing.d.ts",
       "default": "./dist/testing.js"
