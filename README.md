@@ -10,7 +10,7 @@ Written in TypeScript, works at build time too · SVG, PNG, canvas and Blob outp
 ![Node.js: ^22.12 or >=24](https://img.shields.io/badge/node-%5E22.12%20%7C%7C%20%3E%3D24-5fa04e.svg)
 [![npm version](https://img.shields.io/npm/v/qrcode-toolkit.svg?color=4f46e5)](https://www.npmjs.com/package/qrcode-toolkit)
 [![CI](https://github.com/githubthinnd/qrcode-toolkit/actions/workflows/ci.yml/badge.svg)](https://github.com/githubthinnd/qrcode-toolkit/actions/workflows/ci.yml)
-![Status: pre-release](https://img.shields.io/badge/status-pre--release-ef4444.svg)
+[![npm downloads](https://img.shields.io/npm/dm/qrcode-toolkit.svg?label=downloads&color=4c9a2a)](https://www.npmjs.com/package/qrcode-toolkit)
 
 [Quick start](#quick-start) · [Image endpoint](#image-endpoint) · [Framework guides](#framework-guides) · [Cookbook](#cookbook) · [API](#api-reference) · [Playground](#playground) · [FAQ](#faq)
 
@@ -22,7 +22,7 @@ Written in TypeScript, works at build time too · SVG, PNG, canvas and Blob outp
 
 `qrcode-toolkit` generates **QR Codes (Model 2, versions 1–40)** in the browser, on the server and at build time, from one small typed API. The encoder, the SVG and bitmap renderers and the PNG writer are all written in this repository. There is **nothing to install besides the package itself**, and every piece of output is checked against independent QR implementations and decoders.
 
-> **Status: pre-release (0.1.x).** The API may still change before 1.0; pin the version (`npm install qrcode-toolkit@0.1`) if you need stability.
+> **Stable (1.x).** The public API follows [Semantic Versioning](https://semver.org/): breaking changes only in a new major version. See the [changelog](CHANGELOG.md).
 
 ## Why qrcode-toolkit
 
@@ -885,7 +885,7 @@ Most scanners assume UTF-8 for byte data and some mishandle an ECI header. ECI i
 <details>
 <summary><b>Is it on npm?</b></summary>
 
-Yes: `npm install qrcode-toolkit`. It is a 0.x pre-release, so `^0.1.0` only accepts 0.1.x updates.
+Yes: `npm install qrcode-toolkit`. It is a stable 1.x package, so `^1.0.0` accepts every compatible update.
 
 </details>
 

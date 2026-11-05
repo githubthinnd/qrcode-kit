@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-The project is a pre-release (0.1.x). Security fixes are made on the latest 0.1.x release; once 1.0 is released, the latest minor version receives them.
+Security fixes are made on the latest 1.x release.
 
 ## Reporting a vulnerability
 

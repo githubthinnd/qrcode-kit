@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-11-05
+
+First stable release: the public API is now covered by Semantic Versioning. It contains everything listed below.
+
 ### Added
 
 - **Micro QR (M1–M4) and rMQR (32 sizes)**: `symbol: 'micro' | 'rmqr'`, version names (`'M3'`, `'R9x59'`), per-symbol levels and defaults, a 2-module default quiet zone and rectangular `QRMatrix` (`width`, `height`, `symbol`, `designation`). Rendered by the SVG, PNG, text and canvas renderers. Verified bit-for-bit against reference symbols from ZXing-C++'s tests and by decoding every version and level with ZXing-C++ (`zxing-wasm`, a development dependency).
