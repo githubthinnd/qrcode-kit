@@ -8,6 +8,9 @@ export const DEFAULTS = Object.freeze({
   hex: '48 65 6c 6c 6f',
   segments: 'numeric:0123456789\nalphanumeric:HELLO WORLD',
   symbols: '',
+  symbol: 'qr',
+  symbolVersion: 'auto',
+  maskScoring: 'standard',
   ecc: 'M',
   versionMin: '',
   versionMax: '',
@@ -174,17 +177,22 @@ export function buildRequest(s) {
     if (n !== undefined && n !== 0) set('symbols', n);
   }
 
-  if (s.ecc !== DEFAULTS.ecc) set('ecc', s.ecc);
-  const min = intOrUndefined(s.versionMin);
-  const max = intOrUndefined(s.versionMax);
-  if (min !== undefined && max !== undefined && min === max) set('version', min);
+  const compact = s.symbol !== 'qr';
+  if (compact) set('symbol', s.symbol);
+  const defaultLevel = s.symbol === 'micro' ? 'L' : 'M';
+  if (s.ecc !== defaultLevel) set('ecc', s.ecc);
+  const min = compact ? undefined : intOrUndefined(s.versionMin);
+  const max = compact ? undefined : intOrUndefined(s.versionMax);
+  if (compact && s.symbolVersion !== 'auto') set('version', s.symbolVersion);
+  else if (min !== undefined && max !== undefined && min === max) set('version', min);
   else if (min !== undefined || max !== undefined) {
     set('version', {
       ...(min === undefined ? {} : { min }),
       ...(max === undefined ? {} : { max }),
     });
   }
-  if (s.mask !== 'auto') set('mask', Number(s.mask));
+  if (s.mask !== 'auto' && s.symbol !== 'rmqr') set('mask', Number(s.mask));
+  else if (s.symbol === 'qr' && s.maskScoring !== 'standard') set('maskScoring', s.maskScoring);
   if (s.boostEcc) set('boostEcc', true);
   if (s.charset !== DEFAULTS.charset && s.mode !== 'bytes') set('charset', s.charset);
   if (s.kanji) set('kanji', true);
@@ -201,7 +209,8 @@ export function buildRequest(s) {
     });
   }
 
-  if (s.quietZone !== DEFAULTS.quietZone) set('quietZone', Number(s.quietZone));
+  if (Number(s.quietZone) !== (compact ? 2 : DEFAULTS.quietZone))
+    set('quietZone', Number(s.quietZone));
   const sizing = intOrUndefined(s.sizeValue);
   if (s.sizeMode === 'scale' && sizing !== undefined) set('scale', sizing);
   if (s.sizeMode === 'size' && sizing !== undefined) set('size', sizing);

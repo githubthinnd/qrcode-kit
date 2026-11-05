@@ -22,6 +22,8 @@ const textFields = {
   versionMin: 'in-vmin',
   versionMax: 'in-vmax',
   mask: 'in-mask',
+  symbolVersion: 'in-symver',
+  maskScoring: 'in-mask-scoring',
   charset: 'in-charset',
   eci: 'in-eci',
   eciNumber: 'in-eci-n',
@@ -49,6 +51,8 @@ const checkFields = {
   gradientOn: 'in-gradient',
 };
 
+let lastSymbol = 'qr';
+
 const radioValue = (groupId) =>
   $(groupId).querySelector('[aria-checked="true"]')?.getAttribute('data-value') ?? '';
 function setRadio(groupId, value) {
@@ -63,6 +67,7 @@ function readState() {
   const state = {
     mode: radioValue('seg-mode'),
     ecc: radioValue('seg-ecc'),
+    symbol: radioValue('seg-symbol'),
     shape: radioValue('seg-shape'),
   };
   for (const [key, id] of Object.entries(textFields)) state[key] = $(id).value;
@@ -76,6 +81,9 @@ function writeState(partial) {
   const state = { ...DEFAULTS, ...partial };
   setRadio('seg-mode', state.mode);
   setRadio('seg-ecc', state.ecc);
+  setRadio('seg-symbol', state.symbol);
+  fillSymbolVersions(state.symbol, state.symbolVersion);
+  lastSymbol = state.symbol;
   setRadio('seg-shape', state.shape);
   for (const [key, id] of Object.entries(textFields)) $(id).value = String(state[key]);
   for (const [key, id] of Object.entries(checkFields)) $(id).checked = Boolean(state[key]);
@@ -85,8 +93,84 @@ function writeState(partial) {
   syncDependents();
 }
 
+const RMQR_NAMES = [
+  ...[43, 59, 77, 99, 139].map((w) => `R7x${String(w)}`),
+  ...[43, 59, 77, 99, 139].map((w) => `R9x${String(w)}`),
+  ...[27, 43, 59, 77, 99, 139].map((w) => `R11x${String(w)}`),
+  ...[27, 43, 59, 77, 99, 139].map((w) => `R13x${String(w)}`),
+  ...[43, 59, 77, 99, 139].map((w) => `R15x${String(w)}`),
+  ...[43, 59, 77, 99, 139].map((w) => `R17x${String(w)}`),
+];
+const SYMBOL_RULES = {
+  qr: { levels: ['L', 'M', 'Q', 'H'], quiet: 4, hint: '' },
+  micro: {
+    levels: ['L', 'M', 'Q'],
+    quiet: 2,
+    hint: 'Smallest symbols (11–17 modules). Numbers, letters, bytes or Kanji up to 35 digits; no ECI, FNC1, logo or sequence.',
+  },
+  rmqr: {
+    levels: ['M', 'H'],
+    quiet: 2,
+    hint: 'Rectangular Micro QR: 32 sizes from 7×43 to 17×139 modules, for narrow spaces. Mask is fixed by the standard.',
+  },
+};
+const LEVEL_LABELS = { L: 'L · 7%', M: 'M · 15%', Q: 'Q · 25%', H: 'H · 30%' };
+
+function fillSymbolVersions(symbol, selected = 'auto') {
+  const select = $('in-symver');
+  const names = symbol === 'micro' ? ['M1', 'M2', 'M3', 'M4'] : symbol === 'rmqr' ? RMQR_NAMES : [];
+  const option = (value, label) => {
+    const el = document.createElement('option');
+    el.value = value;
+    el.textContent = label;
+    return el;
+  };
+  select.replaceChildren(option('auto', 'Auto (smallest that fits)'));
+  for (const name of names) select.append(option(name, name));
+  select.value = names.includes(selected) ? selected : 'auto';
+}
+
 /** Show/hide and enable/disable controls that only make sense in some situations. */
 function syncDependents() {
+  const symbol = radioValue('seg-symbol') || 'qr';
+  const rules = SYMBOL_RULES[symbol];
+  if (symbol !== lastSymbol) {
+    fillSymbolVersions(symbol);
+    $('in-quiet').value = String(rules.quiet);
+    if (symbol !== 'qr' && Number($('in-mask').value) > 3) $('in-mask').value = 'auto';
+    lastSymbol = symbol;
+  }
+  for (const field of document.querySelectorAll('[data-sym]')) {
+    field.hidden = !field.getAttribute('data-sym').split(' ').includes(symbol);
+  }
+  for (const button of $('seg-ecc').querySelectorAll('[role="radio"]')) {
+    const value = button.getAttribute('data-value');
+    const allowed = rules.levels.includes(value);
+    button.disabled = !allowed;
+    button.textContent = allowed ? LEVEL_LABELS[value] : value;
+  }
+  if (!rules.levels.includes(radioValue('seg-ecc'))) {
+    setRadio('seg-ecc', symbol === 'micro' ? 'L' : 'M');
+  }
+  for (const option of $('in-mask').options) {
+    option.disabled = symbol === 'micro' && Number(option.value) > 3;
+  }
+  $('symbol-hint').textContent = rules.hint;
+  $('symbol-hint').hidden = rules.hint === '';
+  $('in-mask-scoring').disabled = $('in-mask').value !== 'auto';
+  const compact = symbol !== 'qr';
+  $('in-eci').disabled = symbol === 'micro';
+  $('in-fnc1').disabled = symbol === 'micro';
+  if (symbol === 'micro') {
+    $('in-eci').value = 'off';
+    $('in-fnc1').value = 'none';
+  }
+  const sequence = $('seg-mode').querySelector('[data-value="sequence"]');
+  sequence.disabled = compact;
+  if (compact && radioValue('seg-mode') === 'sequence') setRadio('seg-mode', 'text');
+  const logoControls = ['btn-logo-sample', 'in-logo-file', 'btn-logo-clear'];
+  for (const id of logoControls) $(id).disabled = compact;
+  if (compact && $('in-logo-href').value !== '') $('in-logo-href').value = '';
   const mode = radioValue('seg-mode');
   for (const field of document.querySelectorAll('[data-for]')) {
     field.hidden = !field.getAttribute('data-for').split(' ').includes(mode);
@@ -333,7 +417,8 @@ async function show(results, format, ms, isSequence) {
       ? `${String(matrix.version)} (${String(results.length)} symbols)`
       : String(matrix.version),
   );
-  add('Modules', `${String(matrix.size)} × ${String(matrix.size)}`);
+  if (matrix.symbol !== 'qr') add('Symbol', matrix.designation);
+  add('Modules', `${String(matrix.width)} × ${String(matrix.height)}`);
   add('Mask', String(matrix.mask));
   add('Level', matrix.ecc);
   add('Size', formatBytes(results.reduce((n, r) => n + bytesOf(r.value), 0)));
@@ -409,7 +494,10 @@ function fillDetails(results, format) {
     bytes: bytesOf(r.value),
     matrix: {
       version: r.matrix.version,
-      size: r.matrix.size,
+      symbol: r.matrix.symbol,
+      designation: r.matrix.designation,
+      width: r.matrix.width,
+      height: r.matrix.height,
       ecc: r.matrix.ecc,
       mask: r.matrix.mask,
       structuredAppend: r.matrix.structuredAppend ?? null,
@@ -464,15 +552,16 @@ let anatomyMatrix = null;
 function drawAnatomy(matrix) {
   anatomyMatrix = matrix;
   const canvas = $('anatomy-canvas');
-  const size = matrix.size;
-  const cell = Math.max(1, Math.floor(960 / size));
-  canvas.width = canvas.height = cell * size;
+  const { width, height } = matrix;
+  const cell = Math.max(1, Math.floor(960 / Math.max(width, height)));
+  canvas.width = cell * width;
+  canvas.height = cell * height;
   const ctx = canvas.getContext('2d');
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   const counts = new Map(KINDS.map(([k]) => [k, 0]));
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
       const kind = matrix.kind(x, y);
       counts.set(kind, (counts.get(kind) ?? 0) + 1);
       const color = KINDS.find(([k]) => k === kind)?.[2] ?? '#000';
@@ -514,9 +603,9 @@ function drawAnatomy(matrix) {
 $('anatomy-canvas').addEventListener('pointermove', (event) => {
   if (anatomyMatrix === null) return;
   const rect = event.currentTarget.getBoundingClientRect();
-  const x = Math.floor(((event.clientX - rect.left) / rect.width) * anatomyMatrix.size);
-  const y = Math.floor(((event.clientY - rect.top) / rect.height) * anatomyMatrix.size);
-  if (x < 0 || y < 0 || x >= anatomyMatrix.size || y >= anatomyMatrix.size) return;
+  const x = Math.floor(((event.clientX - rect.left) / rect.width) * anatomyMatrix.width);
+  const y = Math.floor(((event.clientY - rect.top) / rect.height) * anatomyMatrix.height);
+  if (x < 0 || y < 0 || x >= anatomyMatrix.width || y >= anatomyMatrix.height) return;
   $('probe').textContent =
     `x=${String(x)}  y=${String(y)}  ${anatomyMatrix.kind(x, y)}  ${anatomyMatrix.get(x, y) ? 'dark' : 'light'}`;
 });
@@ -688,11 +777,14 @@ $('btn-png').addEventListener('click', async () => {
       const img = new Image();
       img.src = url;
       await img.decode();
-      const modules = results[i].matrix.size + Number(readState().quietZone) * 2;
-      const edge = Math.max(512, Math.ceil(1024 / modules) * modules);
+      const quiet = Number(readState().quietZone) * 2;
+      const modulesX = results[i].matrix.width + quiet;
+      const modulesY = results[i].matrix.height + quiet;
+      const cell = Math.max(1, Math.ceil(1024 / Math.max(modulesX, modulesY)));
       const canvas = document.createElement('canvas');
-      canvas.width = canvas.height = edge;
-      canvas.getContext('2d').drawImage(img, 0, 0, edge, edge);
+      canvas.width = modulesX * cell;
+      canvas.height = modulesY * cell;
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
       URL.revokeObjectURL(url);
       const png = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
       const a = document.createElement('a');
@@ -781,7 +873,7 @@ function updateCount() {
 }
 
 function initRadioGroups() {
-  for (const id of ['seg-mode', 'seg-ecc', 'seg-shape']) {
+  for (const id of ['seg-mode', 'seg-symbol', 'seg-ecc', 'seg-shape']) {
     const group = $(id);
     const buttons = [...group.querySelectorAll('[role="radio"]')];
     group.addEventListener('click', (event) => {

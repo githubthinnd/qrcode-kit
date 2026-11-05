@@ -105,25 +105,40 @@
           <header class="card-head"><h2 id="h-symbol">Symbol</h2></header>
 
           <div class="field">
+            <span class="label" id="lbl-symbol">Symbol type</span>
+            <div class="seg" role="radiogroup" aria-labelledby="lbl-symbol" id="seg-symbol">
+              <button type="button" role="radio" data-value="qr">QR Code</button>
+              <button type="button" role="radio" data-value="micro">Micro QR</button>
+              <button type="button" role="radio" data-value="rmqr">rMQR</button>
+            </div>
+            <p class="hint" id="symbol-hint"></p>
+          </div>
+
+          <div class="field">
             <span class="label" id="lbl-ecc">Error correction</span>
             <div class="seg" role="radiogroup" aria-labelledby="lbl-ecc" id="seg-ecc">
-              <button type="button" role="radio" data-value="L">L · 7%</button>
-              <button type="button" role="radio" data-value="M">M · 15%</button>
-              <button type="button" role="radio" data-value="Q">Q · 25%</button>
-              <button type="button" role="radio" data-value="H">H · 30%</button>
+              <button type="button" role="radio" data-value="L">L</button>
+              <button type="button" role="radio" data-value="M">M</button>
+              <button type="button" role="radio" data-value="Q">Q</button>
+              <button type="button" role="radio" data-value="H">H</button>
             </div>
           </div>
 
+          <div class="field" data-sym="micro rmqr">
+            <label for="in-symver">Version</label>
+            <select id="in-symver"></select>
+          </div>
+
           <div class="grid-2">
-            <div class="field">
+            <div class="field" data-sym="qr">
               <label for="in-vmin">Min version</label>
               <input id="in-vmin" type="number" min="1" max="40" step="1" placeholder="1" />
             </div>
-            <div class="field">
+            <div class="field" data-sym="qr">
               <label for="in-vmax">Max version</label>
               <input id="in-vmax" type="number" min="1" max="40" step="1" placeholder="40" />
             </div>
-            <div class="field">
+            <div class="field" data-sym="qr micro">
               <label for="in-mask">Mask</label>
               <select id="in-mask">
                 <option value="auto">Auto (lowest penalty)</option>
@@ -135,6 +150,13 @@
                 <option>5</option>
                 <option>6</option>
                 <option>7</option>
+              </select>
+            </div>
+            <div class="field" data-sym="qr" id="field-scoring">
+              <label for="in-mask-scoring">Mask scoring</label>
+              <select id="in-mask-scoring">
+                <option value="standard">Standard (reference)</option>
+                <option value="fast">Fast (bit-parallel)</option>
               </select>
             </div>
             <div class="field">
@@ -198,7 +220,7 @@
               <label for="in-size-mode">Sizing</label>
               <div class="combo">
                 <select id="in-size-mode">
-                  <option value="scale">Pixels / module</option>
+                  <option value="scale">px / module</option>
                   <option value="size">Target edge (px)</option>
                   <option value="none">Default</option>
                 </select>

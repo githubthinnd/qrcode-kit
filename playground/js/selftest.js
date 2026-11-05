@@ -71,6 +71,28 @@ export function buildTests() {
     for (let mask = 0; mask < 8; mask++)
       ok(plain.encode({ data: 'mask', mask }).mask === mask, `mask ${mask}`);
   });
+  add('Encoding', 'Micro QR M1–M4 and all 32 rMQR sizes have the right geometry', () => {
+    const micro = [11, 13, 15, 17];
+    for (const [i, edge] of micro.entries()) {
+      const m = plain.encode({ data: '1', symbol: 'micro', version: i + 1 });
+      ok(m.width === edge && m.height === edge, `M${i + 1}`);
+    }
+    const names = new Set();
+    for (let v = 1; v <= 32; v++) {
+      const probe = plain.encode({ data: '1', symbol: 'rmqr', version: v });
+      ok(probe.height >= 7 && probe.width >= 27 && probe.width !== probe.height, `rMQR ${v}`);
+      names.add(probe.designation);
+    }
+    ok(names.size === 32, 'rMQR designations are not unique');
+    return '4 + 32 symbols';
+  });
+  add('Encoding', 'fast mask scoring picks a valid mask and the same size', () => {
+    const text = 'https://example.com/fast?scoring=bit-parallel';
+    const a = plain.encode({ data: text, ecc: 'Q' });
+    const b = plain.encode({ data: text, ecc: 'Q', maskScoring: 'fast' });
+    ok(a.version === b.version && b.mask >= 0 && b.mask <= 7, 'fast scoring changed the symbol');
+    return `mask ${a.mask} → ${b.mask}`;
+  });
   add('Encoding', 'encoding is deterministic', () => {
     const a = JSON.stringify(plain.encode({ data: 'repeat me', ecc: 'Q' }).toRows());
     const b = JSON.stringify(plain.encode({ data: 'repeat me', ecc: 'Q' }).toRows());
