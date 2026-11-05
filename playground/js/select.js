@@ -71,7 +71,14 @@ export function enhanceSelect(select) {
     if (list.length === 0) return;
     active = Math.max(0, Math.min(list.length - 1, index));
     list.forEach((li, i) => li.classList.toggle('active', i === active));
-    list[active]?.scrollIntoView({ block: 'nearest' });
+    const el = list[active];
+    if (el !== undefined) {
+      // scroll only the list, never the page behind it
+      if (el.offsetTop < menu.scrollTop) menu.scrollTop = el.offsetTop - 5;
+      else if (el.offsetTop + el.offsetHeight > menu.scrollTop + menu.clientHeight) {
+        menu.scrollTop = el.offsetTop + el.offsetHeight - menu.clientHeight + 5;
+      }
+    }
   };
   const step = (from, direction) => {
     const list = items();
@@ -166,10 +173,11 @@ export function enhanceSelect(select) {
   document.addEventListener('pointerdown', (event) => {
     if (!menu.hidden && !root.contains(event.target)) close();
   });
+  // Scrolling the list itself must not close it; scrolling the page behind it does.
   document.addEventListener(
     'scroll',
-    () => {
-      if (!menu.hidden) close();
+    (event) => {
+      if (!menu.hidden && !menu.contains(event.target)) close();
     },
     true,
   );
