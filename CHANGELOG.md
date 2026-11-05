@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-05
+
+### Added
+
+- `kit.download(request)` on the browser kit and `downloadResult(result, { filename })`: save a QR code as a file (SVG, PNG, text, blobs, data URLs) with a safe file name and automatic cleanup of the temporary URL.
+
 ## [1.0.0] - 2026-11-05
 
 First stable release: the public API is now covered by Semantic Versioning. It contains everything listed below.

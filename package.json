@@ -1,6 +1,6 @@
 {
   "name": "qrcode-toolkit",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Zero-dependency QR code generator for JavaScript and TypeScript: SVG, PNG, Kanji, ECI, GS1 and structured append. Works in Node.js, browsers, React, Next.js, Vue, Nuxt, Svelte, Angular and Astro.",
   "keywords": [
     "qrcode",
