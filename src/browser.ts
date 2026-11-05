@@ -2,7 +2,7 @@ import { createQRCodeKit, type QRCodeKit, type QRCodeKitConfig } from './public/
 import { createBrowserProviders, type CanvasOptions } from './runtimes/browser/index.js';
 
 export {
-  createBlobExporter,
+  createBlobExporters,
   createBrowserProviders,
   createCanvasRenderer,
 } from './runtimes/browser/index.js';
@@ -22,8 +22,9 @@ export function createBrowserKit(
     ...rest,
     providers: {
       ...rest.providers,
-      renderers: [...(rest.providers?.renderers ?? []), ...extra.renderers],
-      exporters: [...(rest.providers?.exporters ?? []), ...extra.exporters],
+      // Runtime providers first: the last registered provider wins, so yours override them.
+      renderers: [...extra.renderers, ...(rest.providers?.renderers ?? [])],
+      exporters: [...extra.exporters, ...(rest.providers?.exporters ?? [])],
     },
   });
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createBlobExporter, createCanvasRenderer } from '../../src/browser.js';
+import { createBlobExporters, createCanvasRenderer } from '../../src/browser.js';
 import { createBufferExporters, createFileExporters } from '../../src/node.js';
 import {
   assertConformance,
@@ -55,7 +55,9 @@ describe('built-in providers pass the public conformance kit', () => {
       },
     });
     assertConformance(await checkRendererProvider(createCanvasRenderer({ createCanvas: create })));
-    assertConformance(await checkExporterProvider(createBlobExporter({ createCanvas: create })));
+    for (const exporter of createBlobExporters({ createCanvas: create })) {
+      assertConformance(await checkExporterProvider(exporter));
+    }
   });
 });
 

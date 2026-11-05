@@ -232,6 +232,33 @@ function segmentLength(segment: Segment): number {
   }
 }
 
+function assertSegmentsNotEmpty(segments: readonly Segment[]): void {
+  segments.forEach((segment, index) => {
+    if (segmentLength(segment) === 0) {
+      throw new InvalidInputError(`Segment ${String(index)} (${segment.mode}) must not be empty.`, {
+        details: { segment: index },
+      });
+    }
+  });
+}
+
+/**
+ * FNC1 second-position application indicator (ISO/IEC 18004 §7.4.8.3): two digits "00"–"99" are
+ * their numeric value 0–99; one Latin letter is its ASCII code plus 100 (A–Z 165–190, a–z 197–222).
+ * A number is taken as the raw 8-bit value (0–255).
+ */
+function resolveApplicationIndicator(value: unknown): number {
+  if (typeof value === 'string') {
+    if (/^\d\d$/.test(value)) return Number(value);
+    if (/^[A-Za-z]$/.test(value)) return value.charCodeAt(0) + 100;
+    throw new InvalidInputError(
+      'Option "fnc1.applicationIndicator" as text must be two digits ("00"–"99") or one Latin letter.',
+      { details: { option: 'fnc1.applicationIndicator' } },
+    );
+  }
+  return integerOption(value, 'fnc1.applicationIndicator', 0, 255);
+}
+
 export interface PreparedSymbol {
   readonly request: EncodeRequest;
   readonly needs: Requirements['encoder'];
@@ -286,6 +313,7 @@ export function normalizeSymbol(
     const segments = data as readonly Segment[];
     if (segments.length === 0)
       throw new InvalidInputError('"data" must not be an empty segment list.');
+    assertSegmentsNotEmpty(segments);
     checkSize(
       segments.reduce((n, s) => n + segmentLength(s), 0),
       limits,
@@ -317,12 +345,7 @@ export function normalizeSymbol(
   else if (typeof request.fnc1 === 'object') {
     fnc1 = {
       position: 'second',
-      applicationIndicator: integerOption(
-        request.fnc1.applicationIndicator,
-        'fnc1.applicationIndicator',
-        0,
-        255,
-      ),
+      applicationIndicator: resolveApplicationIndicator(request.fnc1.applicationIndicator),
     };
   } else if (request.fnc1 !== undefined) {
     throw new InvalidInputError('Option "fnc1" must be "first" or { applicationIndicator }.');
@@ -353,7 +376,7 @@ export function normalizeGenerate(
   request: GenerateRequest,
   limits: KitLimits,
 ): Prepared<EncodeRequest> {
-  if (typeof request !== 'object')
+  if (typeof request !== 'object' || request === null)
     throw new InvalidInputError('The request must be an object with a "data" property.');
   assertKnownKeys(request, [
     ...SYMBOL_OPTION_KEYS,
@@ -384,7 +407,7 @@ export function normalizeStructuredAppend(
   request: StructuredAppendGenerateRequest,
   limits: KitLimits,
 ): Prepared<StructuredAppendRequest> {
-  if (typeof request !== 'object')
+  if (typeof request !== 'object' || request === null)
     throw new InvalidInputError('The request must be an object with a "data" property.');
   assertKnownKeys(request, [
     ...SYMBOL_OPTION_KEYS.filter((k) => !['eci', 'kanji', 'fnc1'].includes(k)),

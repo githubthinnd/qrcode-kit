@@ -81,24 +81,24 @@ Importing `qrcode-toolkit/browser` touches no DOM API, so it is safe in server-s
 
 ## Options
 
-| Option                      | Default        | Meaning                                                                                    |
-| --------------------------- | -------------- | ------------------------------------------------------------------------------------------ |
-| `data`                      | required       | `string`, `Uint8Array`, or an array of explicit segments (`segment.numeric(...)` …)        |
-| `ecc`                       | `'M'`          | Error correction level `'L' \| 'M' \| 'Q' \| 'H'`                                          |
-| `version`                   | 1–40, smallest | An exact version, or `{ min, max }`                                                        |
-| `mask`                      | `'auto'`       | Mask pattern 0–7, or the lowest-penalty one                                                |
-| `boostEcc`                  | `false`        | Raise the level while the data still fits in the chosen version                            |
-| `charset`                   | `'utf-8'`      | `'utf-8'` or `'iso-8859-1'` for string data                                                |
-| `eci`                       | `false`        | `true`: declare the charset of text (ECI 26 / 3). A number: declare that ECI for byte data |
-| `kanji`                     | `false`        | Allow Kanji mode (13 bits per character) for JIS X 0208 text; see [Kanji](#kanji)          |
-| `fnc1`                      | –              | `'first'` or `{ applicationIndicator }` for GS1 / application data                         |
-| `format`                    | `'svg'`        | See [formats](#formats)                                                                    |
-| `quietZone`                 | `4`            | Quiet zone in modules (a warning is returned below 4)                                      |
-| `scale` / `size`            | –              | Pixels per module / target edge in pixels (mutually exclusive)                             |
-| `dark` / `light` / `invert` | black / white  | Colours: `#rgb`, `#rgba`, `#rrggbb`, `#rrggbbaa`, `black`, `white`, `transparent`          |
-| `quality`                   | –              | 0–1, lossy browser formats                                                                 |
-| `path`                      | –              | Destination for file formats                                                               |
-| `providers`                 | –              | Per-operation provider ids: `{ encoder, renderer, exporter }`                              |
+| Option                      | Default        | Meaning                                                                                                                                           |
+| --------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `data`                      | required       | `string`, `Uint8Array`, or an array of explicit segments (`segment.numeric(...)` …)                                                               |
+| `ecc`                       | `'M'`          | Error correction level `'L' \| 'M' \| 'Q' \| 'H'`                                                                                                 |
+| `version`                   | 1–40, smallest | An exact version, or `{ min, max }`                                                                                                               |
+| `mask`                      | `'auto'`       | Mask pattern 0–7, or the lowest-penalty one                                                                                                       |
+| `boostEcc`                  | `false`        | Raise the level while the data still fits in the chosen version                                                                                   |
+| `charset`                   | `'utf-8'`      | `'utf-8'` or `'iso-8859-1'` for string data                                                                                                       |
+| `eci`                       | `false`        | `true`: declare the charset of text (ECI 26 / 3). A number: declare that ECI for byte data                                                        |
+| `kanji`                     | `false`        | Allow Kanji mode (13 bits per character) for JIS X 0208 text; see [Kanji](#kanji)                                                                 |
+| `fnc1`                      | –              | `'first'` (GS1), or `{ applicationIndicator }`: `"00"`–`"99"`, one letter, or a raw 0–255 number                                                  |
+| `format`                    | `'svg'`        | See [formats](#formats)                                                                                                                           |
+| `quietZone`                 | `4`            | Quiet zone in modules (a warning is returned below 4)                                                                                             |
+| `scale` / `size`            | –              | Pixels per module / target edge in pixels (mutually exclusive); raster `size` is rounded down to whole pixels per module (`SIZE_ROUNDED` warning) |
+| `dark` / `light` / `invert` | black / white  | Colours: `#rgb`, `#rgba`, `#rrggbb`, `#rrggbbaa`, `black`, `white`, `transparent`                                                                 |
+| `quality`                   | –              | 0–1, for `jpeg-blob` and `webp-blob` only (rejected elsewhere)                                                                                    |
+| `path`                      | –              | Destination for file formats                                                                                                                      |
+| `providers`                 | –              | Per-operation provider ids: `{ encoder, renderer, exporter }`                                                                                     |
 
 Unknown options and options the selected providers cannot honour raise an error; nothing is ignored silently.
 
@@ -113,6 +113,8 @@ Unknown options and options the selected providers cannot honour raise an error;
 | `png-buffer`, `svg-buffer`           | `Buffer`          | `/node`    |
 | `png-file`, `svg-file`, `text-file`  | `{ path, bytes }` | `/node`    |
 | `png-blob`, `jpeg-blob`, `webp-blob` | `Blob`            | `/browser` |
+
+`jpeg-blob` has no alpha channel, so a transparent `light`/`dark` colour is rejected (`UNSUPPORTED_CAPABILITY`) instead of being flattened to black.
 
 ### Text encoding and ECI
 
@@ -137,11 +139,24 @@ const parts = await kit.generateStructuredAppend({ data: longText, symbols: 3, f
 parts.map((p) => p.matrix.structuredAppend); // { index, total, parity }
 ```
 
+`generateStructuredAppend` takes `string` or `Uint8Array` data only; `eci`, `kanji`, `fnc1` and segment arrays are rejected. Everything else (`ecc`, `version`, `mask`, `boostEcc`, `charset`, appearance, `format`) works as in `generate`.
+
 ## Errors
 
 Every error is a `QRCodeKitError` with a stable `code` (`INVALID_INPUT`, `UNSUPPORTED_DATA`, `INVALID_CONFIGURATION`, `PROVIDER_NOT_FOUND`, `PROVIDER_CONFLICT`, `UNSUPPORTED_CAPABILITY`, `ENCODING_FAILED`, `RENDERING_FAILED`, `EXPORT_FAILED`, `RUNTIME_UNAVAILABLE`, `PLUGIN_FAILED`), the original error in `cause`, and primitive-only `details`. Messages and details describe sizes and option names, never your data. Use `isQRCodeKitError(e)` to recognise them across duplicated copies of the package.
 
-Non-fatal observations (`QUIET_ZONE_SMALL`, `LOW_CONTRAST`, `INVERTED_POLARITY`) are returned in `result.warnings` and passed to the optional `onDiagnostic` callback. Nothing is logged.
+Errors raised by the library never contain your data. An error thrown by your own plugin hook or custom provider is passed through as `cause` unchanged, so it may.
+
+Non-fatal observations (`QUIET_ZONE_SMALL`, `LOW_CONTRAST`, `INVERTED_POLARITY`, `SIZE_ROUNDED`) are returned in `result.warnings` and passed to the optional `onDiagnostic` callback. Nothing is logged.
+
+## Playground
+
+```bash
+npm run playground        # builds the package and the playground, then serves http://127.0.0.1:5173/
+npm run playground:build  # only writes playground-dist/index.html (one self-contained file)
+```
+
+A local, offline workbench for the built package: every option, all eight formats, live preview with zoom and download, an **Anatomy** view that colours each module by role, segment and provider details, copy-ready TypeScript for the current settings, shareable links, and a **Self-test** that runs 28 checks in your browser: canvas drawing, each Blob encoder, capability guards, provider precedence, size rounding and a round trip through independent decoders (jsQR, ZXing and the native `BarcodeDetector` when present). "Verify scan" decodes what you see with the same engines. The decoders are development dependencies bundled into the playground only; the library never imports them.
 
 ## Providers and plugins
 

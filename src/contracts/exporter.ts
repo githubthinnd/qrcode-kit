@@ -58,6 +58,12 @@ export interface ExporterCapabilities {
   readonly requiresPath: boolean;
   /** Honours `ExportOptions.quality`. */
   readonly quality: boolean;
+  /**
+   * Can represent transparent pixels. Default `true`; declare `false` for
+   * formats without an alpha channel (JPEG) so that a request for a
+   * transparent colour is rejected instead of producing a wrong image.
+   */
+  readonly alpha?: boolean;
   readonly sync: boolean;
 }
 

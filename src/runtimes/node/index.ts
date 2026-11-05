@@ -1,9 +1,10 @@
-import { lstat, mkdir, realpath, writeFile } from 'node:fs/promises';
+import { constants } from 'node:fs';
+import { lstat, mkdir, open, realpath, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import { PROVIDER_API_VERSION } from '../../contracts/common.js';
 import type { ExportOptions, ExportedResult, ExporterProvider } from '../../contracts/exporter.js';
 import type { RenderedKind, RenderedOutput } from '../../contracts/renderer.js';
-import { ExportError, RuntimeUnavailableError } from '../../domain/errors.js';
+import { ExportError } from '../../domain/errors.js';
 import { encodeBilevelPng } from '../../formats/png.js';
 
 declare module '../../contracts/exporter.js' {
@@ -193,16 +194,29 @@ export function createFileExporters(options: FileExporterOptions = {}): Exporter
               'The output file is a symbolic link; refusing to write through it.',
             );
           }
-        } else if (options.createDirectories === true) {
-          await mkdir(dirname(path), { recursive: true });
+          // O_NOFOLLOW makes the kernel refuse a link swapped in for the final path component
+          // after the checks above (POSIX; the flag is 0 on Windows). Parent directories are
+          // re-checked once the file is open.
+          const handle = await open(
+            path,
+            constants.O_WRONLY |
+              constants.O_CREAT |
+              constants.O_TRUNC |
+              (constants.O_NOFOLLOW ?? 0),
+          );
+          try {
+            await assertRealInside(rootReal, dirname(await realpath(path)));
+            await handle.writeFile(bytes);
+          } finally {
+            await handle.close();
+          }
+        } else {
+          if (options.createDirectories === true) await mkdir(dirname(path), { recursive: true });
+          await writeFile(path, bytes);
         }
-        await writeFile(path, bytes);
       } catch (cause) {
         if (cause instanceof ExportError) throw cause;
-        throw new RuntimeUnavailableError('The file could not be written.', {
-          cause,
-          details: { path },
-        });
+        throw new ExportError('The file could not be written.', { cause, details: { path } });
       }
       return { format, mimeType, value: { path, bytes: bytes.length } };
     },

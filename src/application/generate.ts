@@ -92,6 +92,28 @@ function guardHook<A extends unknown[], R>(
   };
 }
 
+const isPromise = (value: unknown): value is Promise<unknown> =>
+  typeof value === 'object' &&
+  value !== null &&
+  typeof (value as { then?: unknown }).then === 'function';
+
+/** Warn when a raster came out smaller than the requested `size` (whole pixels per module). */
+function sizeDiagnostics(
+  requested: number | undefined,
+  rendered: RenderedOutput,
+): readonly Diagnostic[] {
+  if (requested === undefined || (rendered.kind !== 'bitmap' && rendered.kind !== 'canvas')) {
+    return [];
+  }
+  if (rendered.width === requested) return [];
+  return [
+    {
+      code: 'SIZE_ROUNDED',
+      message: `The image is ${String(rendered.width)} px wide instead of the requested ${String(requested)} px: raster output uses a whole number of pixels per module so modules stay sharp. Use "scale" for exact control, or SVG for any size.`,
+    },
+  ];
+}
+
 function wrap<T>(fn: () => T, make: (cause: unknown) => QRCodeKitError): T {
   try {
     return fn();
@@ -143,6 +165,11 @@ function missing(
   }
   if (requirements.colors && !renderer.capabilities.colors) {
     gaps.push(`renderer "${renderer.id}" does not support custom colours`);
+  }
+  if (requirements.transparency && exporter.capabilities.alpha === false) {
+    gaps.push(
+      `exporter "${exporter.id}" has no alpha channel, so transparent colours are not possible (use an opaque colour or another format)`,
+    );
   }
   if (requirements.quality && !exporter.capabilities.quality) {
     gaps.push(`exporter "${exporter.id}" does not support the "quality" option`);
@@ -224,6 +251,9 @@ export function createGenerator(deps: GeneratorDeps): Generator {
     let current = matrix;
     for (const hook of hooks.matrix) {
       const next = hook(current);
+      if (isPromise(next)) {
+        throw new PluginError('A plugin hook returned a promise; hooks must be synchronous.');
+      }
       if (
         !(next instanceof QRMatrix) ||
         next.size !== matrix.size ||
@@ -242,6 +272,9 @@ export function createGenerator(deps: GeneratorDeps): Generator {
     let current = rendered;
     for (const hook of hooks.rendered) {
       const next = hook(current);
+      if (isPromise(next)) {
+        throw new PluginError('A plugin hook returned a promise; hooks must be synchronous.');
+      }
       if (next.kind !== rendered.kind)
         throw new PluginError('A plugin changed the kind of the rendered output.');
       current = next;
@@ -260,11 +293,6 @@ export function createGenerator(deps: GeneratorDeps): Generator {
     matrix,
     warnings,
   });
-
-  const isPromise = (value: unknown): value is Promise<unknown> =>
-    typeof value === 'object' &&
-    value !== null &&
-    typeof (value as { then?: unknown }).then === 'function';
 
   const requireSync = (
     providers: { readonly id: string; readonly capabilities: { readonly sync: boolean } }[],
@@ -301,7 +329,7 @@ export function createGenerator(deps: GeneratorDeps): Generator {
 
   return {
     encode(request) {
-      if (typeof request !== 'object')
+      if (typeof request !== 'object' || (request as unknown) === null)
         throw new InvalidInputError('The request must be an object with a "data" property.');
       assertKnownSymbolKeys(request);
       const symbol = normalizeSymbol(request, limits);
@@ -347,8 +375,12 @@ export function createGenerator(deps: GeneratorDeps): Generator {
             details: { provider: exporter.id, format: prepared.output.format },
           }),
       );
-      emit(prepared.warnings);
-      return finish(exported, matrix, prepared.warnings);
+      const warnings = [
+        ...prepared.warnings,
+        ...sizeDiagnostics(prepared.appearance.size, rendered),
+      ];
+      emit(warnings);
+      return finish(exported, matrix, warnings);
     },
 
     generateSync(request) {
@@ -387,8 +419,12 @@ export function createGenerator(deps: GeneratorDeps): Generator {
             details: { provider: exporter.id, format: prepared.output.format },
           }),
       );
-      emit(prepared.warnings);
-      return finish(exported, matrix, prepared.warnings);
+      const warnings = [
+        ...prepared.warnings,
+        ...sizeDiagnostics(prepared.appearance.size, rendered),
+      ];
+      emit(warnings);
+      return finish(exported, matrix, warnings);
     },
 
     async generateStructuredAppend(request) {
@@ -406,6 +442,7 @@ export function createGenerator(deps: GeneratorDeps): Generator {
           new EncodingError('The encoder failed.', { cause, details: { provider: encoder.id } }),
       );
       const results: GenerateResult<never>[] = [];
+      const sizeWarnings: Diagnostic[] = [];
       for (const original of matrices) {
         const matrix = applyMatrixHooks(original);
         const rendered = applyRenderedHooks(
@@ -430,9 +467,11 @@ export function createGenerator(deps: GeneratorDeps): Generator {
               details: { provider: exporter.id, format: prepared.output.format },
             }),
         );
-        results.push(finish(exported, matrix, prepared.warnings));
+        const sizing = sizeDiagnostics(prepared.appearance.size, rendered);
+        sizeWarnings.push(...sizing);
+        results.push(finish(exported, matrix, [...prepared.warnings, ...sizing]));
       }
-      emit(prepared.warnings);
+      emit([...prepared.warnings, ...sizeWarnings]);
       return results;
     },
   };

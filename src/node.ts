@@ -20,7 +20,8 @@ export function createNodeKit(
     ...rest,
     providers: {
       ...rest.providers,
-      exporters: [...(rest.providers?.exporters ?? []), ...createNodeProviders(files).exporters],
+      // Runtime providers first: the last registered provider wins, so yours override them.
+      exporters: [...createNodeProviders(files).exporters, ...(rest.providers?.exporters ?? [])],
     },
   });
 }

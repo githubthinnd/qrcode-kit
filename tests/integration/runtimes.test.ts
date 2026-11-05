@@ -6,7 +6,7 @@ import { PNG } from 'pngjs';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   createBrowserKit,
-  createBlobExporter,
+  createBlobExporters,
   createCanvasRenderer,
   type CanvasLike,
 } from '../../src/browser.js';
@@ -93,7 +93,7 @@ describe('Node.js runtime', () => {
     const strict = createNodeKit({ files: { baseDir: dir } });
     await expect(
       strict.generate({ data: 'x', format: 'png-file', path: 'missing/dir/x.png' }),
-    ).rejects.toBeInstanceOf(RuntimeUnavailableError);
+    ).rejects.toMatchObject({ code: 'EXPORT_FAILED', cause: expect.any(Error) as unknown });
     const lenient = createNodeKit({ files: { baseDir: dir, createDirectories: true } });
     await lenient.generate({ data: 'x', format: 'png-file', path: 'made/by/us/x.png' });
     expect(existsSync(join(dir, 'made/by/us/x.png'))).toBe(true);
@@ -202,7 +202,11 @@ describe('browser runtime (canvas double; no DOM in this process)', () => {
     const { create } = fakeCanvasFactory();
     const kit = createBrowserKit({ canvas: { createCanvas: create } });
     for (const format of ['png-blob', 'jpeg-blob', 'webp-blob'] as const) {
-      const r = await kit.generate({ data: 'blob', format, quality: 0.8 });
+      const r = await kit.generate({
+        data: 'blob',
+        format,
+        ...(format === 'png-blob' ? {} : { quality: 0.8 }),
+      });
       expect(r.value.type).toBe(`image/${format.split('-')[0] ?? ''}`);
       expect(r.mimeType).toBe(r.value.type);
     }
@@ -224,7 +228,7 @@ describe('browser runtime (canvas double; no DOM in this process)', () => {
   });
 
   it('supports OffscreenCanvas-style canvases (convertToBlob)', async () => {
-    const exporter = createBlobExporter({
+    const [exporter] = createBlobExporters({
       createCanvas: (width, height) => ({
         width,
         height,

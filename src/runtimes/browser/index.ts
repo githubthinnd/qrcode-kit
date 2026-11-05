@@ -1,10 +1,5 @@
 import { PROVIDER_API_VERSION, type Rgba } from '../../contracts/common.js';
-import type {
-  BlobLike,
-  ExportOptions,
-  ExportedResult,
-  ExporterProvider,
-} from '../../contracts/exporter.js';
+import type { BlobLike, ExportOptions, ExporterProvider } from '../../contracts/exporter.js';
 import type {
   BitmapOutput,
   CanvasOutput,
@@ -165,33 +160,32 @@ export function createCanvasRenderer(options: CanvasOptions = {}): RendererProvi
   };
 }
 
-const MIME: Readonly<Record<string, string>> = {
-  'png-blob': 'image/png',
-  'jpeg-blob': 'image/jpeg',
-  'webp-blob': 'image/webp',
-};
+const BLOB_FORMATS = [
+  { format: 'png-blob', mimeType: 'image/png', lossy: false },
+  { format: 'jpeg-blob', mimeType: 'image/jpeg', lossy: true },
+  { format: 'webp-blob', mimeType: 'image/webp', lossy: true },
+] as const;
 
-/** `png-blob`, `jpeg-blob` and `webp-blob` via the canvas encoder of the browser. */
-export function createBlobExporter(options: CanvasOptions = {}): ExporterProvider {
+type BlobFormat = (typeof BLOB_FORMATS)[number];
+
+function createBlobExporter(spec: BlobFormat, options: CanvasOptions): ExporterProvider {
   const create = options.createCanvas ?? defaultCreateCanvas;
+  const { format, mimeType, lossy } = spec;
   return {
-    id: 'qrcode-toolkit/browser/blob',
+    id: `qrcode-toolkit/browser/blob-${format.slice(0, -'-blob'.length)}`,
     apiVersion: PROVIDER_API_VERSION,
     capabilities: {
       accepts: ['canvas', 'bitmap'],
-      formats: Object.keys(MIME),
+      formats: [format],
       runtimes: ['browser'],
       requiresPath: false,
-      quality: true,
+      // `quality` only means something to lossy encoders; PNG rejects it instead of ignoring it.
+      quality: lossy,
+      // JPEG has no alpha channel: transparent colours are rejected, not flattened to black.
+      alpha: format !== 'jpeg-blob',
       sync: false,
     },
-    async export(
-      rendered: RenderedOutput,
-      format: string,
-      exportOptions: ExportOptions,
-    ): Promise<ExportedResult> {
-      const mimeType = MIME[format];
-      if (mimeType === undefined) throw new ExportError(`Unknown blob format "${format}".`);
+    async export(rendered: RenderedOutput, _format: string, exportOptions: ExportOptions) {
       let canvas: CanvasLike;
       if (rendered.kind === 'canvas') {
         canvas = rendered.canvas as CanvasLike;
@@ -230,10 +224,15 @@ export function createBlobExporter(options: CanvasOptions = {}): ExporterProvide
   };
 }
 
+/** `png-blob`, `jpeg-blob` and `webp-blob` (one exporter each) via the canvas encoder of the browser. */
+export function createBlobExporters(options: CanvasOptions = {}): ExporterProvider[] {
+  return BLOB_FORMATS.map((spec) => createBlobExporter(spec, options));
+}
+
 /** All browser providers. */
 export function createBrowserProviders(options: CanvasOptions = {}): {
   readonly renderers: readonly RendererProvider[];
   readonly exporters: readonly ExporterProvider[];
 } {
-  return { renderers: [createCanvasRenderer(options)], exporters: [createBlobExporter(options)] };
+  return { renderers: [createCanvasRenderer(options)], exporters: createBlobExporters(options) };
 }

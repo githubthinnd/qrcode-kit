@@ -22,8 +22,12 @@ export interface SymbolOptions {
   readonly eci?: boolean | number;
   /** Allow Kanji mode (Shift JIS, 13 bits per character) for text it can represent. Default `false`. */
   readonly kanji?: boolean;
-  /** FNC1 mode for GS1 / application-indicator data. */
-  readonly fnc1?: 'first' | { readonly applicationIndicator: number };
+  /**
+   * FNC1 mode. `'first'` is GS1 data. `{ applicationIndicator }` is the second-position form: two
+   * digits `"00"`–`"99"` or one Latin letter (as text), or the raw 8-bit value as a number (digits
+   * map to 0–99, a letter to its ASCII code + 100).
+   */
+  readonly fnc1?: 'first' | { readonly applicationIndicator: number | string };
 }
 
 /** Options that control how a symbol is drawn. */
