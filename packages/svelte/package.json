@@ -1,6 +1,6 @@
 {
   "name": "qrcode-toolkit-svelte",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Svelte 5 and SvelteKit component for qrcode-toolkit: zero-dependency QR codes that render on the server and in the browser.",
   "keywords": [
     "qrcode",

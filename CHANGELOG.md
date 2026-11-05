@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-11-05
+
+### Fixed
+
+- Release workflow: the framework packages (`qrcode-toolkit-react`, `-vue`, `-svelte`, `-angular`, now 0.1.1) are published by relative path, so `packages/react` is no longer read as a GitHub repository shorthand.
+- Dependabot no longer proposes major updates of `@types/node` (typings stay at the oldest supported Node).
+
 ## [1.1.0] - 2026-11-05
 
 ### Added

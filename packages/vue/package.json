@@ -1,6 +1,6 @@
 {
   "name": "qrcode-toolkit-vue",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Vue 3 and Nuxt component and composable for qrcode-toolkit: zero-dependency QR codes that render on the server and in the browser.",
   "keywords": [
     "qrcode",
