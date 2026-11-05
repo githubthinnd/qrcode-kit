@@ -5,6 +5,8 @@ export default tseslint.config(
   {
     ignores: [
       'dist/**',
+      'packages/*/dist/**',
+      'packages/*/tests/.build/**',
       'playground-dist/**',
       'node_modules/**',
       'coverage/**',
@@ -84,6 +86,11 @@ export default tseslint.config(
     languageOptions: {
       globals: { process: 'readonly', console: 'readonly', Buffer: 'readonly', URL: 'readonly' },
     },
+  },
+  {
+    // The Svelte adapter is JavaScript with JSDoc types and a hand-written index.d.ts.
+    files: ['packages/svelte/src/**/*.js'],
+    rules: { '@typescript-eslint/explicit-module-boundary-types': 'off' },
   },
   {
     // The playground is browser code that imports the built package from dist/.

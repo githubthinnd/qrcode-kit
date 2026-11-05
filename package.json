@@ -1,6 +1,6 @@
 {
   "name": "qrcode-toolkit",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Zero-dependency QR code generator for JavaScript and TypeScript: SVG, PNG, Kanji, ECI, GS1 and structured append. Works in Node.js, browsers, React, Next.js, Vue, Nuxt, Svelte, Angular and Astro.",
   "keywords": [
     "qrcode",
@@ -46,6 +46,8 @@
   "homepage": "https://github.com/githubthinnd/qrcode-toolkit#readme",
   "type": "module",
   "sideEffects": false,
+  "unpkg": "./dist/bundles/qrcode-toolkit.min.js",
+  "jsdelivr": "./dist/bundles/qrcode-toolkit.min.js",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -72,6 +74,9 @@
   "publishConfig": {
     "access": "public"
   },
+  "workspaces": [
+    "packages/*"
+  ],
   "files": [
     "dist",
     "README.md",
@@ -84,8 +89,8 @@
   },
   "scripts": {
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
-    "build": "npm run clean && tsc -p tsconfig.build.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.universal.json --noEmit && tsc -p tests/tsconfig.json --noEmit",
+    "build": "npm run clean && tsc -p tsconfig.build.json && node scripts/build-bundles.mjs && npm run build --workspaces --if-present",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.universal.json --noEmit && tsc -p tests/tsconfig.json --noEmit && npm run typecheck --workspaces --if-present",
     "lint": "eslint .",
     "format": "prettier --write . --ignore-path .gitignore --ignore-path .prettierignore --ignore-path .git/info/exclude",
     "format:check": "prettier --check . --ignore-path .gitignore --ignore-path .prettierignore --ignore-path .git/info/exclude",

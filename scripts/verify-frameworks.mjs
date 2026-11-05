@@ -6,6 +6,7 @@
 //   Vue 3   SFC compiled for SSR and rendered
 //   Svelte  component compiled for the server and rendered
 //   Next.js the Route Handler (`GET`) called with a Web Request
+// and the packed adapter packages (qrcode-toolkit-react, -vue, -svelte) installed from their tarballs.
 // Angular, Astro, Nuxt and SvelteKit snippets are not executed here; they rely on each framework's
 // own compiler or server and are listed as such in the output.
 import { execFileSync } from 'node:child_process';
@@ -58,9 +59,26 @@ try {
     join(work, 'package.json'),
     JSON.stringify({ name: 'scratch', private: true, type: 'module' }),
   );
+  const adapterPack = JSON.parse(
+    sh(
+      'npm',
+      [
+        'pack',
+        '--json',
+        '--pack-destination',
+        work,
+        '--workspace=qrcode-toolkit-react',
+        '--workspace=qrcode-toolkit-vue',
+        '--workspace=qrcode-toolkit-svelte',
+      ],
+      root,
+    ),
+  );
+  const adapterTarballs = adapterPack.map((entry) => join(work, entry.filename));
   sh('npm', [
     'install',
     tarball,
+    ...adapterTarballs,
     'react@19',
     'react-dom@19',
     'vue@3',
@@ -181,6 +199,68 @@ try {
     );
     expect(out.png.join(',') === '137,80,78,71', 'body is not a PNG');
     expect(out.missing === 400 && out.long === 400, 'bad input should give 400');
+  });
+
+  console.log('Adapter packages (installed from their tarballs)');
+
+  await check('qrcode-toolkit-react: component and hook render on the server', () => {
+    writeFileSync(
+      join(work, 'adapter-react.mjs'),
+      `import { createElement } from 'react';
+       import { renderToString } from 'react-dom/server';
+       import { QRCode, generateQRCode } from 'qrcode-toolkit-react';
+       const html = renderToString(createElement(QRCode, { value: '${URL_TEXT}', label: 'Scan to join', moduleShape: 'rounded' }));
+       console.log(JSON.stringify({ html, result: generateQRCode('x').matrix?.version }));`,
+    );
+    const out = JSON.parse(sh('node', ['adapter-react.mjs']));
+    expectImg(out.html, 'Scan to join');
+    expect(out.result === 1, 'generateQRCode did not return a matrix');
+  });
+
+  await check('qrcode-toolkit-vue: component and composable render on the server', () => {
+    writeFileSync(
+      join(work, 'adapter-vue.mjs'),
+      `import { createSSRApp, h } from 'vue';
+       import { renderToString } from 'vue/server-renderer';
+       import { QRCode, useQRCode } from 'qrcode-toolkit-vue';
+       const html = await renderToString(createSSRApp({ render: () => h(QRCode, { value: '${URL_TEXT}', label: 'Scan to join', moduleShape: 'rounded' }) }));
+       console.log(JSON.stringify({ html, src: useQRCode('x').value.src?.slice(0, 22) }));`,
+    );
+    const out = JSON.parse(sh('node', ['adapter-vue.mjs']));
+    expectImg(out.html, 'Scan to join');
+    expect(out.src === 'data:image/svg+xml;cha', 'useQRCode did not produce a data URL');
+  });
+
+  await check(
+    'qrcode-toolkit-svelte: ships the component, its types and a working generator',
+    () => {
+      const dir = join(work, 'node_modules/qrcode-toolkit-svelte/src');
+      for (const file of ['QRCode.svelte', 'index.js', 'index.d.ts', 'qr.js']) {
+        expect(existsSync(join(dir, file)), `${file} is missing from the package`);
+      }
+      writeFileSync(
+        join(work, 'adapter-svelte.mjs'),
+        `import { generateQRCode } from './node_modules/qrcode-toolkit-svelte/src/qr.js';
+       console.log(generateQRCode('${URL_TEXT}').src?.slice(0, 22));`,
+      );
+      expect(
+        sh('node', ['adapter-svelte.mjs']).startsWith('data:image/svg+xml;cha'),
+        'generator failed',
+      );
+    },
+  );
+
+  await check('adapter packages pass publint (as published)', () => {
+    for (const tarballPath of adapterTarballs) {
+      const unpacked = mkdtempSync(join(work, 'lint-'));
+      sh('tar', ['-xzf', tarballPath, '-C', unpacked]);
+      const out = sh(
+        join(root, 'node_modules/.bin/publint'),
+        ['run', '--strict', '--pack', 'false', join(unpacked, 'package')],
+        root,
+      );
+      expect(!/Errors:|Warnings:/.test(out), out);
+    }
   });
 
   console.log(

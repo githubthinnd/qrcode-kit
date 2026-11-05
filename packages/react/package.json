@@ -1,0 +1,57 @@
+{
+  "name": "qrcode-toolkit-react",
+  "version": "0.1.0",
+  "description": "React component and hook for qrcode-toolkit: zero-dependency QR codes that render on the server and in the browser.",
+  "keywords": [
+    "qrcode",
+    "qr-code",
+    "qrcode-generator",
+    "react",
+    "nextjs",
+    "ssr",
+    "svg",
+    "typescript",
+    "qrcode-toolkit"
+  ],
+  "license": "MIT",
+  "author": "Nhữ Duy Thìn",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/githubthinnd/qrcode-toolkit.git",
+    "directory": "packages/react"
+  },
+  "bugs": {
+    "url": "https://github.com/githubthinnd/qrcode-toolkit/issues"
+  },
+  "homepage": "https://github.com/githubthinnd/qrcode-toolkit/tree/master/packages/react#readme",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "tsc -p tsconfig.build.json"
+  },
+  "peerDependencies": {
+    "qrcode-toolkit": ">=0.1.0",
+    "react": ">=18"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  }
+}

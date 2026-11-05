@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node"],
+    "isolatedDeclarations": true,
+    "paths": { "qrcode-toolkit": ["../../src/index.ts"] }
+  },
+  "include": ["src", "tests"]
+}

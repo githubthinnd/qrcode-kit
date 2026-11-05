@@ -92,9 +92,33 @@ matrix.get(0, 0); // true when the module at x=0, y=0 is dark
 
 ## Framework guides
 
-`qrcode-toolkit` has no framework adapter on purpose: each integration below is a few lines around `kit.generateSync(...)`. Create the kit **once at module level**, derive the image source from your props, and render an `<img>`.
+### Ready-made packages
 
-> The React, Vue 3, Svelte 5 and Next.js Route Handler snippets below are executed from this README by `npm run verify:frameworks` (server-side rendering with React 19, Vue 3 and Svelte 5, and the handler called with a Web `Request`). The Angular, Astro, Nuxt and SvelteKit snippets use only the documented API but are not executed by a test; adapt them to your versions.
+The core stays framework-free; these small packages (in [`packages/`](packages), versioned and published separately) wrap it for the frameworks that have a component model. They are published together with `qrcode-toolkit` 0.2.
+
+| Framework           | Package                                              | What you get                                                          |
+| ------------------- | ---------------------------------------------------- | --------------------------------------------------------------------- |
+| React, Next.js      | [`qrcode-toolkit-react`](packages/react/README.md)   | `<QRCode>` (also in Server Components), `useQRCode`, `generateQRCode` |
+| Vue 3, Nuxt         | [`qrcode-toolkit-vue`](packages/vue/README.md)       | `<QRCode>` with a `fallback` slot, `useQRCode` composable             |
+| Svelte 5, SvelteKit | [`qrcode-toolkit-svelte`](packages/svelte/README.md) | `<QRCode>` with a `fallback` snippet, `generateQRCode`                |
+
+```bash
+npm install qrcode-toolkit-react qrcode-toolkit   # or -vue / -svelte
+```
+
+```tsx
+import { QRCode } from 'qrcode-toolkit-react';
+
+<QRCode value="https://example.com/invite/42" label="Scan to join" moduleShape="rounded" />;
+```
+
+Every package accepts all `qrcode-toolkit` options as props, renders the same markup on the server and in the browser, shows a fallback for content that cannot be encoded and throws on programming mistakes. There is no Angular package: an Angular library must be built with Angular's own packager, so Angular uses the snippet below. Anything else can follow the snippets in this section.
+
+### Copy-paste guides
+
+The guides below show the same integrations without a package. Create the kit **once at module level**, derive the image source from your props, and render an `<img>`.
+
+> The React, Vue 3, Svelte 5 and Next.js Route Handler snippets below are executed from this README by `npm run verify:frameworks` (server-side rendering with React 19, Vue 3 and Svelte 5, and the handler called with a Web `Request`); so are the packed adapter packages. The Angular, Astro, Nuxt and SvelteKit snippets use only the documented API but are not executed by a test; adapt them to your versions.
 
 <details>
 <summary><b>React</b> (Vite, Create React App, Remix, React Router)</summary>
@@ -467,6 +491,24 @@ await files.generate({
 
 <details>
 <summary><b>Plain browser / vanilla JavaScript</b></summary>
+
+No bundler? Load the single-file build from a CDN. It defines one global, `QRCodeToolkit`, with the universal API and the browser kit (about 22 kB gzipped):
+
+```html
+<script src="https://cdn.jsdelivr.net/npm/qrcode-toolkit"></script>
+<img id="qr" width="256" height="256" alt="QR code" />
+<script>
+  const { createQRCodeKit } = QRCodeToolkit;
+  document.getElementById('qr').src = createQRCodeKit().generateSync({
+    data: 'https://example.com',
+    format: 'svg-data-url',
+  }).value;
+</script>
+```
+
+The same file is available as an ES module (`dist/bundles/qrcode-toolkit.esm.min.js`).
+
+With a bundler:
 
 ```html
 <img id="qr" width="256" height="256" alt="QR code" />

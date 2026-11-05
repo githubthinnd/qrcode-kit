@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "noEmit": false,
+    "declaration": true,
+    "isolatedDeclarations": false,
+    "types": [],
+    "paths": { "qrcode-toolkit": ["../../dist/index.d.ts"] }
+  },
+  "include": ["src"]
+}

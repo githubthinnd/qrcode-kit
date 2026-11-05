@@ -9,6 +9,8 @@ npm install
 npm run check
 ```
 
+This is an npm workspace: `packages/react`, `packages/vue` and `packages/svelte` are the framework packages, built on the public API of the root package (they import it by its name; tests and type checks resolve that to `src/`). Their peer dependency on `qrcode-toolkit` has to be satisfiable from the registry for `npm install` to work, so after publishing a new core version raise the range in the three `package.json` files to it.
+
 Requires Node.js `^22.12 || >=24`. `npm run check` runs formatting, lint, type checks (including a check that universal code compiles without Node.js or DOM typings), the architecture rules, all tests, the build, and the packed-tarball verification.
 
 ## Ground rules

@@ -1,0 +1,56 @@
+{
+  "name": "qrcode-toolkit-vue",
+  "version": "0.1.0",
+  "description": "Vue 3 and Nuxt component and composable for qrcode-toolkit: zero-dependency QR codes that render on the server and in the browser.",
+  "keywords": [
+    "qrcode",
+    "qr-code",
+    "qrcode-generator",
+    "vue",
+    "vue3",
+    "nuxt",
+    "ssr",
+    "svg",
+    "typescript",
+    "qrcode-toolkit"
+  ],
+  "license": "MIT",
+  "author": "Nhữ Duy Thìn",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/githubthinnd/qrcode-toolkit.git",
+    "directory": "packages/vue"
+  },
+  "bugs": {
+    "url": "https://github.com/githubthinnd/qrcode-toolkit/issues"
+  },
+  "homepage": "https://github.com/githubthinnd/qrcode-toolkit/tree/master/packages/vue#readme",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "tsc -p tsconfig.build.json"
+  },
+  "peerDependencies": {
+    "qrcode-toolkit": ">=0.1.0",
+    "vue": "^3.3.0"
+  },
+  "devDependencies": {
+    "@vue/server-renderer": "^3.5.0",
+    "vue": "^3.5.0"
+  }
+}

@@ -68,7 +68,7 @@ try {
   check('dist/ outside src/runtimes contains no Node.js or DOM references', () => {
     const forbidden =
       /\b(node:[a-z/]+|require\(|process\.|Buffer\b|window\b|document\b|navigator\b|__dirname|OffscreenCanvas|HTMLCanvasElement)/;
-    const allowed = (file) => /dist\/(runtimes\/|node\.|browser\.)/.test(file);
+    const allowed = (file) => /dist\/(runtimes\/|node\.|browser\.|bundles\/)/.test(file);
     // `globalThis` capability probes are allowed: they are guarded lookups, not assumptions.
     const offenders = [];
     for (const file of listFiles(join(root, 'dist')).filter((f) => f.endsWith('.js'))) {
@@ -109,6 +109,8 @@ try {
       'dist/browser.js',
       'dist/testing.js',
       'dist/kanji.js',
+      'dist/bundles/qrcode-toolkit.min.js',
+      'dist/bundles/qrcode-toolkit.esm.min.js',
       'THIRD_PARTY_NOTICES.md',
     ]) {
       assert(files.includes(f), `missing ${f}`);
@@ -213,6 +215,32 @@ if (matrix.segments[0].mode !== 'kanji') throw new Error('kanji mode not used');
       run('node', [`example-${example}.mjs`], { cwd: consumer });
     });
   }
+
+  writeFileSync(
+    join(consumer, 'cdn.mjs'),
+    `import { readFileSync } from 'node:fs';
+import { runInNewContext } from 'node:vm';
+const dir = 'node_modules/qrcode-toolkit/dist/bundles/';
+
+// classic script: loads with no module system and exposes one global
+const context = {};
+runInNewContext(readFileSync(dir + 'qrcode-toolkit.min.js', 'utf8'), context);
+const api = context.QRCodeToolkit;
+for (const name of ['createQRCode', 'createQRCodeKit', 'createBrowserKit', 'segment', 'isQRCodeKitError']) {
+  if (typeof api[name] === 'undefined') throw new Error('global QRCodeToolkit lacks ' + name);
+}
+const svg = (await api.createQRCode({ data: 'https://example.com', format: 'svg' })).value;
+if (!svg.startsWith('<svg')) throw new Error('script bundle did not render an SVG');
+
+// one ES module with no further imports
+const esm = await import('./' + dir + 'qrcode-toolkit.esm.min.js');
+if (esm.createQRCodeKit().generateSync({ data: 'x' }).value.slice(0, 4) !== '<svg') throw new Error('ESM bundle failed');
+if (/\\bimport\\s*[("']\\./.test(readFileSync(dir + 'qrcode-toolkit.esm.min.js', 'utf8'))) throw new Error('ESM bundle imports other files');
+`,
+  );
+  check('single-file bundles work as a classic script and as an ES module', () =>
+    run('node', ['cdn.mjs'], { cwd: consumer }),
+  );
 
   writeFileSync(
     join(consumer, 'bundle-entry.js'),
@@ -366,7 +394,17 @@ void main;
 
   console.log('Package linters');
   check('publint', () => {
-    const out = run(bin('publint'), ['run', '--strict', '--pack', 'false'], { cwd: root });
+    // Lint the published files themselves (the unpacked tarball), not the workspace tree.
+    const unpacked = join(work, 'publint');
+    mkdirSync(unpacked);
+    run('tar', ['-xzf', tarball, '-C', unpacked]);
+    const out = run(
+      bin('publint'),
+      ['run', '--strict', '--pack', 'false', join(unpacked, 'package')],
+      {
+        cwd: root,
+      },
+    );
     assert(!/Errors:|Warnings:/.test(out), out);
   });
   check('are-the-types-wrong (esm-only profile)', () =>

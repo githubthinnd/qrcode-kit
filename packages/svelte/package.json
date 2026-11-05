@@ -1,0 +1,56 @@
+{
+  "name": "qrcode-toolkit-svelte",
+  "version": "0.1.0",
+  "description": "Svelte 5 and SvelteKit component for qrcode-toolkit: zero-dependency QR codes that render on the server and in the browser.",
+  "keywords": [
+    "qrcode",
+    "qr-code",
+    "qrcode-generator",
+    "svelte",
+    "svelte5",
+    "sveltekit",
+    "ssr",
+    "svg",
+    "typescript",
+    "qrcode-toolkit"
+  ],
+  "license": "MIT",
+  "author": "Nhữ Duy Thìn",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/githubthinnd/qrcode-toolkit.git",
+    "directory": "packages/svelte"
+  },
+  "bugs": {
+    "url": "https://github.com/githubthinnd/qrcode-toolkit/issues"
+  },
+  "homepage": "https://github.com/githubthinnd/qrcode-toolkit/tree/master/packages/svelte#readme",
+  "type": "module",
+  "sideEffects": false,
+  "svelte": "./src/index.js",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "svelte": "./src/index.js",
+      "default": "./src/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "peerDependencies": {
+    "qrcode-toolkit": ">=0.1.0",
+    "svelte": "^5.0.0"
+  },
+  "devDependencies": {
+    "svelte": "^5.0.0"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  }
+}

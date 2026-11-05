@@ -30,3 +30,31 @@ jobs:
         run: |
           TAG=$(node -p "require('./package.json').version.includes('-') ? 'next' : 'latest'")
           npm publish --provenance --access public --tag "$TAG"
+
+  adapters:
+    # The framework packages are published after the core, because they need its new version.
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run build
+      - name: Publish the framework packages whose version is not on npm yet
+        run: |
+          for dir in packages/*; do
+            name=$(node -p "require('./$dir/package.json').name")
+            version=$(node -p "require('./$dir/package.json').version")
+            if npm view "$name@$version" version >/dev/null 2>&1; then
+              echo "$name@$version is already published"
+            else
+              npm publish --workspace "$name" --provenance --access public
+            fi
+          done
