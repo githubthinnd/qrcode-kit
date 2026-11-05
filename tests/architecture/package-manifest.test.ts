@@ -33,9 +33,9 @@ describe('package manifest invariants', () => {
     expect(manifest['main']).toBeUndefined();
   });
 
-  it('is publishable, public, and goes to the "next" tag until 1.0', () => {
+  it('is publishable and public', () => {
     expect(manifest['private']).toBeUndefined();
-    expect(manifest['publishConfig']).toEqual({ access: 'public', tag: 'next' });
+    expect(manifest['publishConfig']).toEqual({ access: 'public' });
     expect(manifest['scripts']).toMatchObject({ prepublishOnly: 'npm run check' });
   });
 
