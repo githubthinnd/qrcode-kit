@@ -308,3 +308,108 @@ export function createBrowserProviders(options: CanvasOptions = {}): {
     exporters: [...createBlobExporters(options), createCanvasExporter()],
   };
 }
+
+/** The parts of the page a download needs (structural, so the module type-checks without DOM typings). */
+export interface DownloadEnvironment {
+  readonly document: {
+    createElement(tag: 'a'): {
+      href: string;
+      download: string;
+      rel: string;
+      style: { display: string };
+      click(): void;
+      remove(): void;
+    };
+    readonly body: { append(node: unknown): void };
+  };
+  readonly URL: {
+    createObjectURL(blob: unknown): string;
+    revokeObjectURL(url: string): void;
+  };
+  readonly Blob: new (parts: unknown[], options: { type: string }) => unknown;
+  readonly setTimeout: (callback: () => void, ms: number) => unknown;
+}
+
+export interface DownloadOptions {
+  /** File name for the download. Default: `qrcode` plus the extension of the format. */
+  readonly filename?: string;
+  /** Override the page objects (tests, iframes). Default: the global `document`, `URL` and `Blob`. */
+  readonly environment?: DownloadEnvironment;
+}
+
+const EXTENSIONS: Readonly<Record<string, string>> = {
+  'image/svg+xml': 'svg',
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/webp': 'webp',
+  'text/plain': 'txt',
+};
+
+/** A safe file name: no folders, no control characters, never empty. */
+export function downloadFilename(requested: string | undefined, mimeType: string): string {
+  const extension = EXTENSIONS[mimeType.split(';')[0]?.trim() ?? ''];
+  if (requested === undefined) return `qrcode${extension === undefined ? '' : `.${extension}`}`;
+  if (typeof requested !== 'string' || requested.trim() === '') {
+    throw new InvalidConfigurationError('The download file name must be a non-empty string.');
+  }
+
+  const leaf = requested.split(/[\\/]/).pop() ?? '';
+  // eslint-disable-next-line no-control-regex
+  const cleaned = leaf.replace(/[\u0000-\u001f\u007f/\\:*?"<>|]+/g, '_').trim();
+  const name = cleaned.replace(/^\.+/, '').slice(0, 120);
+  if (name === '')
+    throw new InvalidConfigurationError('The download file name has no usable characters.');
+  return extension === undefined || name.includes('.') ? name : `${name}.${extension}`;
+}
+
+/**
+ * Save a generated QR Code through the browser's download mechanism. Works for `svg`, `png`,
+ * `text` and the `*-blob` formats; data URLs are used directly. Must run in a user gesture
+ * (a click handler) for browsers to allow it. The canvas format cannot be saved: ask for `png-blob`.
+ */
+export function downloadResult(
+  result: { readonly format: string; readonly mimeType: string; readonly value: unknown },
+  options: DownloadOptions = {},
+): void {
+  const env = options.environment ?? (globalThis as unknown as Partial<DownloadEnvironment>);
+  if (
+    env.document === undefined ||
+    env.URL === undefined ||
+    env.Blob === undefined ||
+    env.setTimeout === undefined
+  ) {
+    throw new RuntimeUnavailableError('Downloads need a browser page (document, URL and Blob).');
+  }
+  const { value } = result;
+  let href: string;
+  let temporary = false;
+  if (typeof value === 'string' && result.format.endsWith('data-url')) {
+    href = value;
+  } else if (typeof value === 'string' || value instanceof Uint8Array) {
+    href = env.URL.createObjectURL(new env.Blob([value], { type: result.mimeType }));
+    temporary = true;
+  } else if (typeof value === 'object' && value !== null && 'size' in value && 'type' in value) {
+    href = env.URL.createObjectURL(value);
+    temporary = true;
+  } else {
+    throw new ExportError(
+      `The "${result.format}" format cannot be downloaded; use svg, png, text or png-blob.`,
+    );
+  }
+  const filename = downloadFilename(options.filename, result.mimeType);
+  const link = env.document.createElement('a');
+  link.href = href;
+  link.download = filename;
+  link.rel = 'noopener';
+  link.style.display = 'none';
+  env.document.body.append(link);
+  link.click();
+  link.remove();
+  if (temporary) {
+    const url = href;
+    const urls = env.URL;
+    env.setTimeout(() => {
+      urls.revokeObjectURL(url);
+    }, 10_000);
+  }
+}

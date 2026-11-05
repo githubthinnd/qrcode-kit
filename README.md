@@ -729,6 +729,25 @@ Unknown options and options the selected providers cannot honour raise an error;
 | `png-blob`, `jpeg-blob`, `webp-blob` | `Blob`             | `/browser`       |
 | `canvas`                             | the canvas element | `/browser`       |
 
+### Downloading in the browser
+
+`createBrowserKit()` can save a QR code as a file in one call. Use it from a click handler, since browsers only allow downloads that follow a user action.
+
+```ts
+import { createBrowserKit } from 'qrcode-toolkit/browser';
+
+const kit = createBrowserKit();
+
+button.addEventListener('click', () => {
+  void kit.download({ data: 'https://example.com', format: 'png', scale: 10, filename: 'my-qr' });
+});
+```
+
+- `filename` is optional (default `qrcode.<ext>`); the extension is added when missing, and folders or characters that break file names are removed.
+- Works for `svg`, `png`, `text`, the `*-blob` formats and the `*-data-url` formats. The `canvas` format cannot be saved; ask for `png-blob` instead.
+- It returns the same result as `generate`, and every other option behaves as in `generate`, including the strict validation.
+- `downloadResult(result, { filename })` saves a result you already have. In Node.js use the `file` formats instead (see [Formats](#formats)).
+
 ### Entry points
 
 | Import                   | Contents                                                                                                  |
