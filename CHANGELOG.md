@@ -6,6 +6,18 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- SVG styling: `moduleShape` (`square`, `rounded`, `dots`), `gradient` (linear or radial) and `logo` (base64 image data URL). The renderer clears the modules under the logo, refuses a logo that would touch a function pattern or hide more than half of what the error correction level recovers, and defaults to level `H`. Raster renderers reject these options. New `DOT_MODULES` warning.
+- Renderer contract: `RenderOptions` carries `moduleShape`, `gradient` and `logo`; `moduleShapes` capability lists the shapes a renderer draws; the conformance kit checks the styles a renderer claims.
+- Kit configuration is validated like requests: unknown keys, wrong types and limits that would disable protection (`NaN`, zero, negative) are rejected with `INVALID_CONFIGURATION`; the same for file-exporter and canvas options.
+- Explicit segments are validated (shape, FNC1 rules) with typed errors.
+- Render-fidelity tests that read the rendered SVG, PNG, text and canvas output back and compare every module with the matrix.
+
+### Fixed
+
+- A transparent or translucent `dark` colour no longer shows the `light` background through the dark modules in SVG and canvas output, matching the PNG output.
+
 ### Changed
 
 - The published package no longer ships source maps and declaration maps (they pointed at `src/`, which is not published): 102 fewer files.

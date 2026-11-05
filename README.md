@@ -28,7 +28,7 @@ Written in TypeScript, works at build time too · SVG, PNG, canvas and Blob outp
 
 |                                  |                                                                                                                                                                          |
 | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Zero dependencies**            | No transitive packages, no install scripts. About 17 kB gzipped for `createQRCode` with every built-in provider (measured with esbuild).                                 |
+| **Zero dependencies**            | No transitive packages, no install scripts. About 20 kB gzipped for `createQRCode` with every built-in provider (measured with esbuild).                                 |
 | **Every framework, one API**     | Plain functions with no framework code inside. The same call powers a React component, a Nuxt server route and an Astro page. See [Framework guides](#framework-guides). |
 | **SSR-safe by design**           | Output is deterministic and synchronous with the built-in providers, so the server and the client render the same markup: no hydration mismatch, no global state.        |
 | **Complete QR feature set**      | Numeric, alphanumeric, byte and **Kanji** modes, **ECI**, **FNC1/GS1**, **structured append**, automatic size-optimal segmentation, mask selection.                      |
@@ -505,6 +505,32 @@ await files.generate({
 - **Size by container:** with SVG, `size` only sets the intrinsic size, so let CSS scale the `<img>`. For PNG, prefer `scale` so every module is a whole number of pixels.
 - **Bound untrusted input** before encoding (a few hundred characters is plenty for most links) and handle the thrown `QRCodeKitError`.
 
+## Styled QR codes (SVG)
+
+The built-in SVG renderer can round the modules, fill them with a gradient and put a logo in the centre. Styled output uses the same matrix, so it scans the same way as long as the contrast and the error correction hold.
+
+```ts
+import { createQRCode } from 'qrcode-toolkit';
+
+const { value } = await createQRCode({
+  data: 'https://example.com/invite/42',
+  format: 'svg',
+  moduleShape: 'rounded', // 'square' (default) | 'rounded' | 'dots'
+  gradient: { from: '#4f46e5', to: '#0f172a', angle: 45 }, // or type: 'radial'
+  logo: { href: logoDataUrl, size: 0.2 }, // base64 data URL: png, jpeg, webp, gif or svg
+});
+```
+
+- **`rounded`** rounds only the exposed corners, so neighbouring modules join into one shape. jsQR and ZXing both read it in the playground self-test.
+- **`dots`** draws circles. It is the least compatible shape (jsQR cannot read it, ZXing can), so the result carries a `DOT_MODULES` warning. Test it with your audience's scanners.
+- **Finder patterns** stay recognisable: they are drawn as rounded rings for `rounded` and `dots`.
+- **`gradient`** replaces `dark`, so it cannot be combined with `dark` or `invert`. Stops must be opaque enough to keep 3:1 contrast with the light colour, or a `LOW_CONTRAST` warning is returned.
+- **`logo`** is centred and the modules under it (plus `margin`, default 1) are cleared. The renderer refuses a logo that would touch a finder, timing or format pattern, or hide more than half of what the error correction level can recover (3.5 % for `L`, 7.5 % for `M`, 12.5 % for `Q`, 15 % for `H`). When you do not set `ecc`, level `H` is used. The `href` must be a base64 `data:image/png|jpeg|webp|gif|svg+xml` URL of at most 256 KB; anything else is rejected, so nothing user-controlled reaches the markup.
+- **Raster output** (`png`, `png-blob`, `text`, …) rejects these options with `UNSUPPORTED_CAPABILITY` instead of ignoring them. To get a PNG of a styled code in the browser, draw the SVG onto a canvas (the [playground](#playground) has a "Save as PNG" button that does exactly that).
+- With a non-square shape, translucent colours are composited over the light colour instead of leaving a hole.
+
+The self-test of the playground draws each style in a real browser and decodes it with independent decoders before it passes.
+
 ## Cookbook
 
 <details>
@@ -615,6 +641,9 @@ Scanners that support structured append rejoin the parts; others read each part 
 | `quietZone`                 | `4`            | Quiet zone in modules (a warning is returned below 4)                                                                                             |
 | `scale` / `size`            | –              | Pixels per module / target edge in pixels (mutually exclusive); raster `size` is rounded down to whole pixels per module (`SIZE_ROUNDED` warning) |
 | `dark` / `light` / `invert` | black / white  | Colours: `#rgb`, `#rgba`, `#rrggbb`, `#rrggbbaa`, `black`, `white`, `transparent`                                                                 |
+| `moduleShape`               | `'square'`     | `'rounded'` or `'dots'`; SVG formats only, see [Styled QR codes](#styled-qr-codes-svg)                                                            |
+| `gradient`                  | –              | `{ from, to, type?, angle? }` replaces `dark`; SVG formats only                                                                                   |
+| `logo`                      | –              | `{ href, size?, margin? }`: a base64 image data URL in the centre; SVG formats only, defaults to level `H`                                        |
 | `quality`                   | –              | 0–1, for `jpeg-blob` and `webp-blob` only (rejected elsewhere)                                                                                    |
 | `path`                      | –              | Destination for file formats                                                                                                                      |
 | `providers`                 | –              | Per-operation provider ids: `{ encoder, renderer, exporter }`                                                                                     |
@@ -661,7 +690,7 @@ try {
 
 Errors raised by the library never contain your data. An error thrown by your own plugin hook or custom provider is passed through as `cause` unchanged, so it may.
 
-Non-fatal observations (`QUIET_ZONE_SMALL`, `LOW_CONTRAST`, `INVERTED_POLARITY`, `SIZE_ROUNDED`) are returned in `result.warnings` and passed to the optional `onDiagnostic` callback. Nothing is logged.
+Non-fatal observations (`QUIET_ZONE_SMALL`, `LOW_CONTRAST`, `INVERTED_POLARITY`, `SIZE_ROUNDED`, `DOT_MODULES`) are returned in `result.warnings` and passed to the optional `onDiagnostic` callback. Nothing is logged.
 
 ### Text encoding and ECI
 
@@ -700,7 +729,7 @@ npm run playground        # builds the package and the playground, then serves h
 npm run playground:build  # only writes playground-dist/index.html (one self-contained file)
 ```
 
-A local, offline workbench for the built package: every option, all eight formats, live preview with zoom and download, an **Anatomy** view that colours each module by role, segment and provider details, copy-ready TypeScript for the current settings, shareable links, and a **Self-test** that runs 28 checks in your browser: canvas drawing, each Blob encoder, capability guards, provider precedence, size rounding and a round trip through independent decoders (jsQR, ZXing and the native `BarcodeDetector` when present). "Verify scan" decodes what you see with the same engines. The decoders are development dependencies bundled into the playground only; the library never imports them.
+A local, offline workbench for the built package: every option, all eight formats, live preview with zoom and download, an **Anatomy** view that colours each module by role, segment and provider details, copy-ready TypeScript for the current settings, shareable links, and a **Self-test** that runs 35 checks in your browser: canvas drawing, each Blob encoder, capability guards, provider precedence, size rounding, a round trip through independent decoders and the styled SVG variants (shapes, gradients, logo) drawn by the browser and decoded back (jsQR, ZXing and the native `BarcodeDetector` when present). "Verify scan" decodes what you see with the same engines. The decoders are development dependencies bundled into the playground only; the library never imports them.
 
 ## Quality and verification
 
@@ -727,7 +756,7 @@ Report vulnerabilities privately; see [SECURITY.md](SECURITY.md).
 ## Limitations
 
 - Only QR Code Model 2. Micro QR and rMQR are not supported.
-- PNG output is two-colour (1-bit palette). Gradients, rounded modules and logos are not implemented.
+- PNG output is two-colour (1-bit palette). Rounded modules, gradients and logos are SVG-only (draw the SVG on a canvas for a PNG); the canvas renderer draws square modules.
 - Kanji mode is strictly JIS X 0208 (6 872 characters; seven characters whose Windows and JIS mappings disagree use byte mode instead).
 - Real-device scanning (iOS / Android cameras) and real-browser runs have not yet been part of the automated verification.
 - Runtimes: browsers and Node.js are supported and tested. The core entry (`qrcode-toolkit`) uses no Node.js or DOM API, so it is built to run on Deno, Bun and edge workers too, but those runtimes are not tested yet and not claimed. The `/node` entry needs Node.js and the `/browser` entry needs a canvas.
@@ -751,7 +780,7 @@ No. Generation is deterministic and, with the built-in providers, synchronous, s
 <details>
 <summary><b>Can I put a logo in the middle?</b></summary>
 
-Not yet; logos, gradients and rounded modules are not implemented. You can draw over the symbol yourself using `kit.encode(...)` (the `QRMatrix` exposes every module and its role) and use error correction `H` to leave room.
+Yes, in SVG output: `logo: { href: dataUrl }`. See [Styled QR codes](#styled-qr-codes-svg) for how the renderer protects scannability (error correction level `H` by default, and a refusal when the logo would hide too much).
 
 </details>
 
