@@ -5,6 +5,7 @@ export default tseslint.config(
   {
     ignores: [
       'dist/**',
+      'playground-dist/**',
       'node_modules/**',
       'coverage/**',
       'tests/architecture/fixtures/**',
@@ -81,8 +82,46 @@ export default tseslint.config(
   {
     files: ['scripts/**/*.mjs', 'bench/**/*.mjs', 'examples/**/*.mjs'],
     languageOptions: {
-      globals: { process: 'readonly', console: 'readonly', Buffer: 'readonly' },
+      globals: { process: 'readonly', console: 'readonly', Buffer: 'readonly', URL: 'readonly' },
     },
+  },
+  {
+    // The playground is browser code that imports the built package from dist/.
+    files: ['playground/js/**/*.js'],
+    rules: { '@typescript-eslint/explicit-module-boundary-types': 'off' },
+    languageOptions: {
+      globals: Object.fromEntries(
+        [
+          'window',
+          'document',
+          'navigator',
+          'location',
+          'history',
+          'localStorage',
+          'matchMedia',
+          'performance',
+          'console',
+          'setTimeout',
+          'clearTimeout',
+          'URL',
+          'Blob',
+          'Image',
+          'DOMParser',
+          'ClipboardItem',
+          'TextEncoder',
+          'TextDecoder',
+          'createImageBitmap',
+          'fetch',
+          'btoa',
+          'atob',
+          'globalThis',
+        ].map((name) => [name, 'readonly']),
+      ),
+    },
+  },
+  {
+    files: ['playground/serve.mjs'],
+    languageOptions: { globals: { process: 'readonly', console: 'readonly', URL: 'readonly' } },
   },
   {
     files: ['**/*.cjs'],

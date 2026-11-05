@@ -1,0 +1,443 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>qrcode-toolkit · Playground</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Crect width='10' height='10' rx='2' fill='%234f46e5'/%3E%3Cpath fill='%23fff' d='M1.5 1.5h3v3h-3zM5.5 1.5h3v3h-3zM1.5 5.5h3v3h-3zM6 6h1v1H6zM7.5 7.5h1v1h-1zM5.5 7.5h1v1h-1zM7.5 5.5h1v1h-1z'/%3E%3C/svg%3E"
+    />
+    <link rel="stylesheet" href="css/styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#preview-panel">Skip to output</a>
+
+    <header class="topbar">
+      <div class="brand">
+        <svg class="brand-mark" viewBox="0 0 10 10" aria-hidden="true">
+          <rect width="10" height="10" rx="2.2" fill="currentColor" />
+          <path
+            fill="#fff"
+            d="M1.5 1.5h3v3h-3zM5.5 1.5h3v3h-3zM1.5 5.5h3v3h-3zM6 6h1v1H6zM7.5 7.5h1v1h-1zM5.5 7.5h1v1h-1zM7.5 5.5h1v1h-1z"
+          />
+        </svg>
+        <div>
+          <h1>qrcode-toolkit <span>Playground</span></h1>
+          <p id="kit-line">Loading…</p>
+        </div>
+      </div>
+      <div class="topbar-actions">
+        <button
+          class="btn ghost"
+          id="btn-share"
+          type="button"
+          title="Copy a link that restores these settings"
+        >
+          Share link
+        </button>
+        <button class="btn ghost" id="btn-reset" type="button">Reset</button>
+        <button
+          class="btn icon"
+          id="btn-theme"
+          type="button"
+          aria-label="Toggle colour theme"
+          title="Toggle colour theme"
+        >
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+            <path fill="currentColor" d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9Z" />
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <!-- ───────────── Controls ───────────── -->
+      <form class="controls" id="controls" autocomplete="off" spellcheck="false">
+        <section class="card" aria-labelledby="h-content">
+          <header class="card-head">
+            <h2 id="h-content">Content</h2>
+            <div class="seg" role="radiogroup" aria-label="Input type" id="seg-mode">
+              <button type="button" role="radio" data-value="text">Text</button>
+              <button type="button" role="radio" data-value="bytes">Bytes</button>
+              <button type="button" role="radio" data-value="segments">Segments</button>
+              <button type="button" role="radio" data-value="sequence">Sequence</button>
+            </div>
+          </header>
+
+          <div class="field" data-for="text sequence">
+            <label for="in-text" id="lbl-text">Text</label>
+            <textarea id="in-text" rows="4"></textarea>
+          </div>
+          <div class="field" data-for="bytes">
+            <label for="in-hex">Bytes (hex)</label>
+            <textarea id="in-hex" rows="3" class="mono" placeholder="48 65 6c 6c 6f"></textarea>
+          </div>
+          <div class="field" data-for="segments">
+            <label for="in-segments">Segments, one per line</label>
+            <textarea
+              id="in-segments"
+              rows="5"
+              class="mono"
+              placeholder="eci:26&#10;numeric:0123456789&#10;byte:68 69"
+            ></textarea>
+            <p class="hint">
+              <code>numeric:</code> <code>alphanumeric:</code> <code>kanji:</code>
+              <code>byte:</code>(hex) <code>eci:</code>(number) <code>fnc1-first</code>
+              <code>fnc1-second:</code>(0–255)
+            </p>
+          </div>
+          <div class="field row" data-for="sequence">
+            <label for="in-symbols">Symbols</label>
+            <input id="in-symbols" type="number" min="0" max="16" step="1" placeholder="auto" />
+            <p class="hint">2–16, empty = fewest that fit</p>
+          </div>
+
+          <div class="meta-row">
+            <span id="count-line" class="muted">0 characters</span>
+            <label class="inline" for="in-preset">Examples</label>
+            <select id="in-preset" aria-label="Load an example"></select>
+          </div>
+        </section>
+
+        <section class="card" aria-labelledby="h-symbol">
+          <header class="card-head"><h2 id="h-symbol">Symbol</h2></header>
+
+          <div class="field">
+            <span class="label" id="lbl-ecc">Error correction</span>
+            <div class="seg" role="radiogroup" aria-labelledby="lbl-ecc" id="seg-ecc">
+              <button type="button" role="radio" data-value="L">L · 7%</button>
+              <button type="button" role="radio" data-value="M">M · 15%</button>
+              <button type="button" role="radio" data-value="Q">Q · 25%</button>
+              <button type="button" role="radio" data-value="H">H · 30%</button>
+            </div>
+          </div>
+
+          <div class="grid-2">
+            <div class="field">
+              <label for="in-vmin">Min version</label>
+              <input id="in-vmin" type="number" min="1" max="40" step="1" placeholder="1" />
+            </div>
+            <div class="field">
+              <label for="in-vmax">Max version</label>
+              <input id="in-vmax" type="number" min="1" max="40" step="1" placeholder="40" />
+            </div>
+            <div class="field">
+              <label for="in-mask">Mask</label>
+              <select id="in-mask">
+                <option value="auto">Auto (lowest penalty)</option>
+                <option>0</option>
+                <option>1</option>
+                <option>2</option>
+                <option>3</option>
+                <option>4</option>
+                <option>5</option>
+                <option>6</option>
+                <option>7</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="in-charset">Charset (text)</label>
+              <select id="in-charset">
+                <option value="utf-8">UTF-8</option>
+                <option value="iso-8859-1">ISO-8859-1</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="checks">
+            <label class="check"
+              ><input id="in-boost" type="checkbox" /><span>Boost ECC</span></label
+            >
+            <label class="check"
+              ><input id="in-kanji" type="checkbox" /><span>Kanji mode</span></label
+            >
+          </div>
+
+          <details class="adv">
+            <summary>ECI &amp; FNC1</summary>
+            <div class="grid-2">
+              <div class="field">
+                <label for="in-eci">ECI</label>
+                <select id="in-eci">
+                  <option value="off">Off (no header)</option>
+                  <option value="auto">Declare text charset</option>
+                  <option value="number">Assignment number</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="in-eci-n">Assignment</label>
+                <input id="in-eci-n" type="number" min="0" max="999999" step="1" placeholder="26" />
+              </div>
+              <div class="field">
+                <label for="in-fnc1">FNC1</label>
+                <select id="in-fnc1">
+                  <option value="none">None</option>
+                  <option value="first">First position (GS1)</option>
+                  <option value="second">Second position</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="in-fnc1-ai">Application indicator</label>
+                <input id="in-fnc1-ai" type="text" placeholder="37, A or 165" />
+              </div>
+            </div>
+          </details>
+        </section>
+
+        <section class="card" aria-labelledby="h-look">
+          <header class="card-head"><h2 id="h-look">Appearance</h2></header>
+
+          <div class="grid-2">
+            <div class="field">
+              <label for="in-quiet">Quiet zone <output id="out-quiet">4</output></label>
+              <input id="in-quiet" type="range" min="0" max="16" step="1" value="4" />
+            </div>
+            <div class="field">
+              <label for="in-size-mode">Sizing</label>
+              <div class="combo">
+                <select id="in-size-mode">
+                  <option value="scale">Pixels / module</option>
+                  <option value="size">Target edge (px)</option>
+                  <option value="none">Default</option>
+                </select>
+                <input id="in-size" type="number" min="1" step="1" aria-label="Sizing value" />
+              </div>
+            </div>
+          </div>
+
+          <div class="grid-2">
+            <div class="field">
+              <span class="label">Dark</span>
+              <div class="swatch">
+                <input id="in-dark" type="color" aria-label="Dark colour" />
+                <input id="in-dark-text" type="text" aria-label="Dark colour value" class="mono" />
+              </div>
+            </div>
+            <div class="field">
+              <span class="label">Light</span>
+              <div class="swatch">
+                <input id="in-light" type="color" aria-label="Light colour" />
+                <input
+                  id="in-light-text"
+                  type="text"
+                  aria-label="Light colour value"
+                  class="mono"
+                />
+              </div>
+            </div>
+          </div>
+          <div class="checks">
+            <label class="check"
+              ><input id="in-light-transparent" type="checkbox" /><span
+                >Transparent light</span
+              ></label
+            >
+            <label class="check"><input id="in-invert" type="checkbox" /><span>Invert</span></label>
+          </div>
+        </section>
+
+        <section class="card" aria-labelledby="h-out">
+          <header class="card-head"><h2 id="h-out">Output</h2></header>
+          <div class="field">
+            <label for="in-format">Format</label>
+            <select id="in-format"></select>
+          </div>
+          <div class="field">
+            <label class="check"
+              ><input id="in-quality-on" type="checkbox" /><span
+                >Send <code>quality</code></span
+              ></label
+            >
+            <input
+              id="in-quality"
+              type="range"
+              min="0"
+              max="1"
+              step="0.05"
+              value="0.9"
+              aria-label="Quality"
+            />
+            <p class="hint" id="quality-hint">
+              Only <code>jpeg-blob</code> and <code>webp-blob</code> accept it; elsewhere it is
+              rejected, never ignored.
+            </p>
+          </div>
+        </section>
+      </form>
+
+      <!-- ───────────── Output ───────────── -->
+      <section class="output" id="preview-panel" aria-label="Output">
+        <div class="tabs" role="tablist" aria-label="Output views" id="tabs">
+          <button
+            role="tab"
+            id="tab-preview"
+            aria-controls="pane-preview"
+            aria-selected="true"
+            data-tab="preview"
+          >
+            Preview
+          </button>
+          <button
+            role="tab"
+            id="tab-anatomy"
+            aria-controls="pane-anatomy"
+            aria-selected="false"
+            data-tab="anatomy"
+            tabindex="-1"
+          >
+            Anatomy
+          </button>
+          <button
+            role="tab"
+            id="tab-details"
+            aria-controls="pane-details"
+            aria-selected="false"
+            data-tab="details"
+            tabindex="-1"
+          >
+            Details
+          </button>
+          <button
+            role="tab"
+            id="tab-code"
+            aria-controls="pane-code"
+            aria-selected="false"
+            data-tab="code"
+            tabindex="-1"
+          >
+            Code
+          </button>
+          <button
+            role="tab"
+            id="tab-selftest"
+            aria-controls="pane-selftest"
+            aria-selected="false"
+            data-tab="selftest"
+            tabindex="-1"
+          >
+            Self-test
+          </button>
+        </div>
+
+        <div class="status" id="status" role="status" aria-live="polite"></div>
+
+        <div class="pane" id="pane-preview" role="tabpanel" aria-labelledby="tab-preview">
+          <div class="stage-wrap">
+            <div class="stage" id="stage"><p class="muted">Rendering…</p></div>
+          </div>
+          <div class="toolbar">
+            <div class="zoom">
+              <label for="in-zoom">Zoom</label>
+              <input id="in-zoom" type="range" min="40" max="200" step="5" value="100" />
+              <output id="out-zoom">100%</output>
+            </div>
+            <div class="toolbar-actions">
+              <button class="btn" id="btn-copy" type="button">Copy</button>
+              <button class="btn" id="btn-download" type="button">Download</button>
+              <button
+                class="btn primary"
+                id="btn-scan"
+                type="button"
+                title="Decode the symbol with the browser's BarcodeDetector"
+              >
+                Verify scan
+              </button>
+            </div>
+          </div>
+          <dl class="chips" id="chips"></dl>
+          <div id="scan-result" class="scan" hidden></div>
+          <ul class="warnings" id="warnings" aria-label="Warnings"></ul>
+        </div>
+
+        <div class="pane" id="pane-anatomy" role="tabpanel" aria-labelledby="tab-anatomy" hidden>
+          <p class="muted">
+            Every module coloured by its role. Hover to inspect; <kbd>click</kbd> a legend entry to
+            hide it.
+          </p>
+          <div class="anatomy">
+            <canvas
+              id="anatomy-canvas"
+              width="480"
+              height="480"
+              aria-label="Annotated QR Code matrix"
+              role="img"
+            ></canvas>
+            <div>
+              <ul class="legend" id="legend"></ul>
+              <p class="probe" id="probe" aria-live="off">Hover a module…</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="pane" id="pane-details" role="tabpanel" aria-labelledby="tab-details" hidden>
+          <h3>Segments</h3>
+          <div class="table-wrap">
+            <table id="seg-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Mode</th>
+                  <th>Items</th>
+                  <th>Bits</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <h3>Result</h3>
+          <pre class="code" id="result-json"></pre>
+          <h3>Output source</h3>
+          <pre class="code" id="source"></pre>
+          <h3>Providers in this kit</h3>
+          <p class="muted" id="prov-formats"></p>
+          <div class="table-wrap">
+            <table id="prov-table">
+              <thead>
+                <tr>
+                  <th>Kind</th>
+                  <th>Id</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="pane" id="pane-code" role="tabpanel" aria-labelledby="tab-code" hidden>
+          <p class="muted">The same call as TypeScript, reflecting the current settings.</p>
+          <div class="code-head">
+            <button class="btn" id="btn-copy-code" type="button">Copy code</button>
+          </div>
+          <pre class="code" id="code"></pre>
+        </div>
+
+        <div class="pane" id="pane-selftest" role="tabpanel" aria-labelledby="tab-selftest" hidden>
+          <div class="selftest-head">
+            <div>
+              <h3>Real-browser self-test</h3>
+              <p class="muted">
+                Runs the built package in <em>this</em> browser: canvas drawing, every Blob encoder,
+                capability guards, provider precedence, size rounding and, where
+                <code>BarcodeDetector</code> exists, a decode round trip.
+              </p>
+            </div>
+            <button class="btn primary" id="btn-selftest" type="button">Run self-test</button>
+          </div>
+          <div class="summary" id="selftest-summary" hidden></div>
+          <ol class="tests" id="selftest-list"></ol>
+          <p class="hint" id="env-line"></p>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <span>Everything runs locally from <code>dist/</code>; nothing is uploaded.</span>
+      <span>Package is <code>private</code> and unpublished.</span>
+    </footer>
+
+    <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+    <script type="module" src="js/main.js"></script>
+  </body>
+</html>
