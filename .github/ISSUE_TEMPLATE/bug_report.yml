@@ -1,0 +1,34 @@
+name: Bug report
+description: A QR Code that does not scan, a wrong output, a crash or a type error
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: qrcode-toolkit version
+      placeholder: 0.1.0
+    validations:
+      required: true
+  - type: input
+    id: runtime
+    attributes:
+      label: Runtime and framework
+      description: Node.js version, or browser and version, plus the framework if any
+      placeholder: Node.js 24.21, Nuxt 3.14
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal reproduction
+      description: The exact `generate` call (options and data, or a description of the data). Do not paste secrets.
+      render: ts
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected and what happened
+      description: For scan problems, name the scanner app or library and the device.
+    validations:
+      required: true
