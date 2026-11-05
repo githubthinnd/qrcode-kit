@@ -18,8 +18,14 @@ import { join, relative, resolve } from 'node:path';
 const root = resolve(import.meta.dirname, '..');
 const bin = (name) => join(root, 'node_modules', '.bin', name);
 const work = mkdtempSync(join(tmpdir(), 'qtk-verify-'));
+// When this script runs from `prepublishOnly`, npm leaks its own settings (npm_config_dry_run,
+// npm_command, ...) into child processes. A leaked dry-run flag makes the nested `npm pack` write
+// no tarball, so every npm_* variable is dropped and only the ones below are set.
+const inherited = Object.fromEntries(
+  Object.entries(process.env).filter(([key]) => !key.toLowerCase().startsWith('npm_')),
+);
 const env = {
-  ...process.env,
+  ...inherited,
   npm_config_cache: join(work, 'npm-cache'),
   npm_config_userconfig: '/dev/null',
 };
