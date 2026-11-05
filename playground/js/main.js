@@ -32,6 +32,13 @@ const textFields = {
   dark: 'in-dark-text',
   light: 'in-light-text',
   format: 'in-format',
+  gradFrom: 'in-grad-from-text',
+  gradTo: 'in-grad-to-text',
+  gradType: 'in-grad-type',
+  gradAngle: 'in-grad-angle',
+  logoHref: 'in-logo-href',
+  logoSize: 'in-logo-size',
+  logoMargin: 'in-logo-margin',
 };
 const checkFields = {
   boostEcc: 'in-boost',
@@ -39,6 +46,7 @@ const checkFields = {
   lightTransparent: 'in-light-transparent',
   invert: 'in-invert',
   qualityOn: 'in-quality-on',
+  gradientOn: 'in-gradient',
 };
 
 const radioValue = (groupId) =>
@@ -52,7 +60,11 @@ function setRadio(groupId, value) {
 }
 
 function readState() {
-  const state = { mode: radioValue('seg-mode'), ecc: radioValue('seg-ecc') };
+  const state = {
+    mode: radioValue('seg-mode'),
+    ecc: radioValue('seg-ecc'),
+    shape: radioValue('seg-shape'),
+  };
   for (const [key, id] of Object.entries(textFields)) state[key] = $(id).value;
   for (const [key, id] of Object.entries(checkFields)) state[key] = $(id).checked;
   state.quietZone = Number($('in-quiet').value);
@@ -64,6 +76,7 @@ function writeState(partial) {
   const state = { ...DEFAULTS, ...partial };
   setRadio('seg-mode', state.mode);
   setRadio('seg-ecc', state.ecc);
+  setRadio('seg-shape', state.shape);
   for (const [key, id] of Object.entries(textFields)) $(id).value = String(state[key]);
   for (const [key, id] of Object.entries(checkFields)) $(id).checked = Boolean(state[key]);
   $('in-quiet').value = String(state.quietZone);
@@ -89,12 +102,40 @@ function syncDependents() {
   $('in-quality').disabled = !quality;
   $('in-light').disabled = $('in-light-transparent').checked;
   $('in-light-text').disabled = $('in-light-transparent').checked;
+
+  const gradient = $('in-gradient').checked;
+  for (const id of [
+    'in-grad-from',
+    'in-grad-from-text',
+    'in-grad-to',
+    'in-grad-to-text',
+    'in-grad-type',
+    'in-grad-angle',
+  ]) {
+    $(id).disabled = !gradient;
+  }
+  $('out-grad-angle').textContent = $('in-grad-angle').value;
+  $('in-grad-angle').disabled = !gradient || $('in-grad-type').value === 'radial';
+  $('in-dark').disabled = gradient;
+  $('in-dark-text').disabled = gradient;
+
+  const logo = $('in-logo-href').value;
+  $('in-logo-size').disabled = logo === '';
+  $('in-logo-margin').disabled = logo === '';
+  $('btn-logo-clear').disabled = logo === '';
+  $('out-logo-size').textContent = $('in-logo-size').value;
+  const preview = $('logo-preview');
+  preview.hidden = logo === '';
+  if (logo === '') preview.removeAttribute('src');
+  else if (preview.getAttribute('src') !== logo) preview.setAttribute('src', logo);
 }
 
 function syncColorPickers() {
   for (const [picker, text] of [
     ['in-dark', 'in-dark-text'],
     ['in-light', 'in-light-text'],
+    ['in-grad-from', 'in-grad-from-text'],
+    ['in-grad-to', 'in-grad-to-text'],
   ]) {
     const value = $(text).value.trim();
     if (/^#[0-9a-f]{6}$/i.test(value)) $(picker).value = value.toLowerCase();
@@ -120,8 +161,11 @@ function saveHash() {
   try {
     const diff = {};
     const state = readState();
-    for (const key of Object.keys(DEFAULTS))
+    for (const key of Object.keys(DEFAULTS)) {
+      // An uploaded logo can be large; it is left out of shareable links.
+      if (key === 'logoHref' && state[key].length > 1500) continue;
       if (state[key] !== DEFAULTS[key]) diff[key] = state[key];
+    }
     const hash = Object.keys(diff).length === 0 ? '' : `#s=${encodeHash(diff)}`;
     history.replaceState(null, '', `${location.pathname}${location.search}${hash}`);
   } catch {
@@ -312,6 +356,7 @@ async function show(results, format, ms, isSequence) {
   fillDetails(results, format);
   drawAnatomy(matrix);
   $('btn-copy').disabled = false;
+  $('btn-png').hidden = !format.startsWith('svg');
 }
 
 function chip(label, value) {
@@ -597,6 +642,72 @@ $('btn-scan').addEventListener('click', async () => {
   }
 });
 
+/* ───────────────────────── logo and PNG-from-SVG ───────────────────────── */
+
+const SAMPLE_LOGO_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" rx="24" fill="#4f46e5"/><path fill="#fff" d="M28 28h20v20H28zM52 28h20v20H52zM28 52h20v20H28zM56 56h8v8h-8zM68 68h8v8h-8z"/></svg>';
+
+function setLogo(href) {
+  $('in-logo-href').value = href;
+  syncDependents();
+  updateCount();
+  schedule();
+}
+
+$('btn-logo-sample').addEventListener('click', () => {
+  setLogo(`data:image/svg+xml;base64,${btoa(SAMPLE_LOGO_SVG)}`);
+});
+$('btn-logo-clear').addEventListener('click', () => {
+  $('in-logo-file').value = '';
+  setLogo('');
+});
+$('in-logo-file').addEventListener('change', (event) => {
+  const file = event.target.files?.[0];
+  if (file === undefined) return;
+  if (file.size > 190_000) {
+    toast('That image is too large (limit about 190 KB)');
+    event.target.value = '';
+    return;
+  }
+  const reader = new FileReader();
+  reader.addEventListener('load', () => {
+    setLogo(String(reader.result));
+  });
+  reader.readAsDataURL(file);
+});
+
+$('btn-png').addEventListener('click', async () => {
+  if (current === null) return;
+  const { results, blobs } = current;
+  try {
+    for (const [i, blob] of blobs.entries()) {
+      const url = URL.createObjectURL(blob);
+      const img = new Image();
+      img.src = url;
+      await img.decode();
+      const modules = results[i].matrix.size + Number(readState().quietZone) * 2;
+      const edge = Math.max(512, Math.ceil(1024 / modules) * modules);
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas.height = edge;
+      canvas.getContext('2d').drawImage(img, 0, 0, edge, edge);
+      URL.revokeObjectURL(url);
+      const png = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(png);
+      a.download = `qrcode-v${String(results[i].matrix.version)}-${results[i].matrix.ecc}.png`;
+      document.body.append(a);
+      a.click();
+      a.remove();
+      setTimeout(() => {
+        URL.revokeObjectURL(a.href);
+      }, 1000);
+    }
+    toast('PNG saved');
+  } catch {
+    toast('Could not draw this SVG on a canvas');
+  }
+});
+
 $('btn-copy-code').addEventListener('click', () =>
   copyText($('code').textContent ?? '', 'Code copied'),
 );
@@ -667,7 +778,7 @@ function updateCount() {
 }
 
 function initRadioGroups() {
-  for (const id of ['seg-mode', 'seg-ecc']) {
+  for (const id of ['seg-mode', 'seg-ecc', 'seg-shape']) {
     const group = $(id);
     const buttons = [...group.querySelectorAll('[role="radio"]')];
     group.addEventListener('click', (event) => {
@@ -811,10 +922,8 @@ function init() {
   });
   $('controls').addEventListener('input', (event) => {
     const target = event.target;
-    if (target.id === 'in-dark' || target.id === 'in-light') {
-      $(`${target.id}-text`).value = target.value;
-    }
-    if (target.id === 'in-dark-text' || target.id === 'in-light-text') syncColorPickers();
+    if (target.type === 'color') $(`${target.id}-text`).value = target.value;
+    if (target.type === 'text' && target.id.endsWith('-text')) syncColorPickers();
     syncDependents();
     updateCount();
     schedule();

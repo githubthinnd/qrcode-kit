@@ -290,6 +290,71 @@ export function buildTests() {
     });
   }
 
+  // ── Styled SVG, decoded from what a browser really draws ───────────────
+  const LOGO =
+    'data:image/svg+xml;base64,' +
+    btoa(
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" rx="24" fill="#4f46e5"/><path fill="#fff" d="M28 28h20v20H28zM52 28h20v20H52zM28 52h20v20H28zM56 56h8v8h-8zM68 68h8v8h-8z"/></svg>',
+    );
+  const BRAND = { from: '#312e81', to: '#0f172a' };
+  const styled = [
+    ['rounded modules', { moduleShape: 'rounded' }, ['M', 'Q', 'H']],
+    ['dot modules', { moduleShape: 'dots' }, ['M', 'Q', 'H']],
+    ['linear gradient', { gradient: BRAND }, ['M', 'H']],
+    ['radial gradient', { gradient: { ...BRAND, type: 'radial' } }, ['M', 'H']],
+    ['logo in the centre', { logo: { href: LOGO }, version: { min: 6 } }, ['H']],
+    [
+      'rounded + gradient + logo',
+      { moduleShape: 'rounded', gradient: BRAND, logo: { href: LOGO }, version: { min: 6 } },
+      ['H'],
+    ],
+  ];
+  const STYLED_TEXT = 'https://example.com/styled-qr-codes?scan=still-works&lang=vi';
+  for (const [label, options, levels] of styled) {
+    add('Styled SVG', `${label} are read back at ${levels.join(', ')}`, async () => {
+      const failures = [];
+      const engines = new Set();
+      for (const ecc of levels) {
+        const { value } = await kit.generate({
+          data: STYLED_TEXT,
+          ecc,
+          format: 'svg-data-url',
+          scale: 8,
+          ...options,
+        });
+        const img = new Image();
+        img.src = value;
+        await img.decode();
+        const reads = await decodeAll(rasterize(img, img.naturalWidth, img.naturalHeight));
+        const good = reads.filter((r) => r.text === STYLED_TEXT);
+        if (good.length === 0) failures.push(ecc);
+        for (const r of good) engines.add(r.name);
+      }
+      ok(failures.length === 0, `not read back at: ${failures.join(', ')}`);
+      return `read by ${[...engines].join(', ')}`;
+    });
+  }
+  add(
+    'Guards',
+    'styling is rejected on raster formats and bad logos never reach the markup',
+    async () => {
+      await rejectsWith(
+        kit.generate({ data: 'x', format: 'png-blob', moduleShape: 'dots' }),
+        'UNSUPPORTED_CAPABILITY',
+        /dots/,
+      );
+      await rejectsWith(
+        kit.generate({ data: 'x', logo: { href: 'https://example.com/x.png' } }),
+        'INVALID_INPUT',
+        /logo\.href/,
+      );
+      await rejectsWith(
+        kit.generate({ data: 'x', logo: { href: LOGO }, ecc: 'L' }),
+        'RENDERING_FAILED',
+      );
+    },
+  );
+
   // ── Performance ─────────────────────────────────────────────────────────
   add('Performance', 'version 40-L (7 089 digits) renders in under 2 s', async () => {
     const start = performance.now();

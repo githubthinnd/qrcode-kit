@@ -26,6 +26,15 @@ export const DEFAULTS = Object.freeze({
   light: '#ffffff',
   lightTransparent: false,
   invert: false,
+  shape: 'square',
+  gradientOn: false,
+  gradFrom: '#4f46e5',
+  gradTo: '#0f172a',
+  gradType: 'linear',
+  gradAngle: '45',
+  logoHref: '',
+  logoSize: '20',
+  logoMargin: '1',
   format: 'svg',
   qualityOn: false,
   quality: 0.9,
@@ -195,11 +204,25 @@ export function buildRequest(s) {
   const sizing = intOrUndefined(s.sizeValue);
   if (s.sizeMode === 'scale' && sizing !== undefined) set('scale', sizing);
   if (s.sizeMode === 'size' && sizing !== undefined) set('size', sizing);
-  if (s.dark.trim() !== '' && s.dark.trim().toLowerCase() !== DEFAULTS.dark)
+  if (!s.gradientOn && s.dark.trim() !== '' && s.dark.trim().toLowerCase() !== DEFAULTS.dark) {
     set('dark', s.dark.trim());
+  }
   const light = s.lightTransparent ? 'transparent' : s.light.trim();
   if (light !== '' && light.toLowerCase() !== DEFAULTS.light) set('light', light);
   if (s.invert) set('invert', true);
+  if (s.shape !== 'square') set('moduleShape', s.shape);
+  if (s.gradientOn) {
+    const gradient = { from: s.gradFrom.trim(), to: s.gradTo.trim() };
+    if (s.gradType !== 'linear') gradient.type = s.gradType;
+    if (Number(s.gradAngle) !== 45) gradient.angle = Number(s.gradAngle);
+    set('gradient', gradient);
+  }
+  if (s.logoHref !== '') {
+    const logo = { href: s.logoHref };
+    if (Number(s.logoSize) !== 20) logo.size = Number(s.logoSize) / 100;
+    if (Number(s.logoMargin) !== 1) logo.margin = Number(s.logoMargin);
+    set('logo', logo, { ...logo, href: code(`'${s.logoHref.slice(0, 30)}…'`) });
+  }
 
   set('format', s.format);
   if (s.qualityOn) set('quality', Number(s.quality));

@@ -108,6 +108,7 @@ export default tseslint.config(
           'Image',
           'DOMParser',
           'ClipboardItem',
+          'FileReader',
           'TextEncoder',
           'TextDecoder',
           'createImageBitmap',
