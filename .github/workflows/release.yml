@@ -58,6 +58,7 @@ jobs:
               # ng-packagr writes the publishable package to dist/
               target="$dir"
               if [ -f "$dir/ng-package.json" ]; then target="$dir/dist"; fi
-              npm publish "$target" --provenance --access public
+              # "./" matters: "packages/react" alone would be read as a GitHub user/repo shorthand
+              npm publish "./$target" --provenance --access public
             fi
           done
