@@ -7,7 +7,12 @@ import type {
   RenderedOutput,
   RendererProvider,
 } from '../../contracts/renderer.js';
-import { ExportError, RenderingError, RuntimeUnavailableError } from '../../domain/errors.js';
+import {
+  ExportError,
+  InvalidConfigurationError,
+  RenderingError,
+  RuntimeUnavailableError,
+} from '../../domain/errors.js';
 import type { QRMatrix } from '../../domain/matrix.js';
 import { rasterScale } from '../../formats/geometry.js';
 
@@ -42,6 +47,21 @@ export interface CanvasOptions {
   readonly createCanvas?: (width: number, height: number) => CanvasLike;
 }
 
+function checkCanvasOptions(options: CanvasOptions): void {
+  if (typeof options !== 'object' || options === null) {
+    throw new InvalidConfigurationError('The canvas options must be an object.');
+  }
+  const unknown = Object.keys(options).filter((key) => key !== 'createCanvas');
+  if (unknown.length > 0) {
+    throw new InvalidConfigurationError(
+      `Unknown canvas option${unknown.length > 1 ? 's' : ''}: ${unknown.join(', ')}. Options are never ignored silently.`,
+    );
+  }
+  if (options.createCanvas !== undefined && typeof options.createCanvas !== 'function') {
+    throw new InvalidConfigurationError('The "createCanvas" option must be a function.');
+  }
+}
+
 function defaultCreateCanvas(width: number, height: number): CanvasLike {
   const g = globalThis as unknown as {
     document?: { createElement(tag: 'canvas'): CanvasLike };
@@ -71,31 +91,39 @@ function context(canvas: CanvasLike): Canvas2DLike {
 /** Draw runs of dark pixels row by row; light pixels are only painted when not transparent. */
 function paintBitmap(canvas: CanvasLike, bitmap: BitmapOutput): void {
   const ctx = context(canvas);
+  /** Fill the horizontal runs of pixels whose state equals `wanted` (true = dark). */
+  const fillRuns = (wanted: boolean): void => {
+    for (let y = 0; y < bitmap.height; y++) {
+      const on = (px: number): boolean => (bitmap.pixels[y * bitmap.width + px] !== 0) === wanted;
+      let x = 0;
+      while (x < bitmap.width) {
+        if (!on(x)) {
+          x++;
+          continue;
+        }
+        let end = x;
+        while (end < bitmap.width && on(end)) end++;
+        ctx.fillRect(x, y, end - x, 1);
+        x = end;
+      }
+    }
+  };
   if (bitmap.light.a > 0) {
     ctx.fillStyle = css(bitmap.light);
-    ctx.fillRect(0, 0, bitmap.width, bitmap.height);
+    // Same rule as the canvas renderer: only an opaque dark layer may paint over the background.
+    if (bitmap.dark.a === 255) ctx.fillRect(0, 0, bitmap.width, bitmap.height);
+    else fillRuns(false);
   }
   if (bitmap.dark.a === 0) return;
   ctx.fillStyle = css(bitmap.dark);
-  for (let y = 0; y < bitmap.height; y++) {
-    let x = 0;
-    while (x < bitmap.width) {
-      if (bitmap.pixels[y * bitmap.width + x] === 0) {
-        x++;
-        continue;
-      }
-      let end = x;
-      while (end < bitmap.width && bitmap.pixels[y * bitmap.width + end] !== 0) end++;
-      ctx.fillRect(x, y, end - x, 1);
-      x = end;
-    }
-  }
+  fillRuns(true);
 }
 
 const DEFAULT_SCALE = 8;
 
 /** Renders onto a canvas (HTMLCanvasElement or OffscreenCanvas) and returns it. */
 export function createCanvasRenderer(options: CanvasOptions = {}): RendererProvider {
+  checkCanvasOptions(options);
   const create = options.createCanvas ?? defaultCreateCanvas;
   return {
     id: 'qrcode-toolkit/browser/canvas',
@@ -130,30 +158,34 @@ export function createCanvasRenderer(options: CanvasOptions = {}): RendererProvi
       const ctx = context(canvas);
       const dark = render.invert ? render.light : render.dark;
       const light = render.invert ? render.dark : render.light;
-      if (light.a > 0) {
-        ctx.fillStyle = css(light);
-        ctx.fillRect(0, 0, edge, edge);
-      }
-      if (dark.a > 0) {
-        ctx.fillStyle = css(dark);
-        for (let y = 0; y < matrix.size; y++) {
+      /** Fill the runs of modules (quiet zone included) whose state equals `wanted`. */
+      const fillRuns = (wanted: boolean): void => {
+        for (let y = 0; y < modules; y++) {
+          const on = (px: number): boolean =>
+            matrix.get(px - render.quietZone, y - render.quietZone) === wanted;
           let x = 0;
-          while (x < matrix.size) {
-            if (!matrix.get(x, y)) {
+          while (x < modules) {
+            if (!on(x)) {
               x++;
               continue;
             }
             let end = x;
-            while (end < matrix.size && matrix.get(end, y)) end++;
-            ctx.fillRect(
-              (x + render.quietZone) * scale,
-              (y + render.quietZone) * scale,
-              (end - x) * scale,
-              scale,
-            );
+            while (end < modules && on(end)) end++;
+            ctx.fillRect(x * scale, y * scale, (end - x) * scale, scale);
             x = end;
           }
         }
+      };
+      if (light.a > 0) {
+        ctx.fillStyle = css(light);
+        // An opaque dark layer hides the background, so one rectangle will do; otherwise the light
+        // colour is painted only where modules are light, so translucent dark modules stay clear.
+        if (dark.a === 255) ctx.fillRect(0, 0, edge, edge);
+        else fillRuns(false);
+      }
+      if (dark.a > 0) {
+        ctx.fillStyle = css(dark);
+        fillRuns(true);
       }
       return { kind: 'canvas', canvas, width: edge, height: edge };
     },
@@ -226,6 +258,7 @@ function createBlobExporter(spec: BlobFormat, options: CanvasOptions): ExporterP
 
 /** `png-blob`, `jpeg-blob` and `webp-blob` (one exporter each) via the canvas encoder of the browser. */
 export function createBlobExporters(options: CanvasOptions = {}): ExporterProvider[] {
+  checkCanvasOptions(options);
   return BLOB_FORMATS.map((spec) => createBlobExporter(spec, options));
 }
 

@@ -53,6 +53,101 @@ export interface QRCodeKit extends Generator {
   describe(): KitDescription;
 }
 
+const CONFIG_KEYS: readonly string[] = [
+  'providers',
+  'builtIns',
+  'defaultEncoder',
+  'routes',
+  'plugins',
+  'limits',
+  'onDiagnostic',
+  'kanji',
+];
+const LIMIT_KEYS: readonly string[] = ['maxInputLength', 'maxPixels'];
+
+function rejectUnknown(value: object, allowed: readonly string[], where: string): void {
+  const unknown = Object.keys(value).filter((key) => !allowed.includes(key));
+  if (unknown.length > 0) {
+    throw new InvalidConfigurationError(
+      `Unknown ${where} option${unknown.length > 1 ? 's' : ''}: ${unknown.join(', ')}. Options are never ignored silently.`,
+      { details: { options: unknown.join(', ') } },
+    );
+  }
+}
+
+/** Validate the kit configuration the way requests are validated: nothing is ignored, nothing is guessed. */
+function validateConfig(config: unknown): QRCodeKitConfig {
+  if (config === undefined) return {};
+  if (typeof config !== 'object' || config === null) {
+    throw new InvalidConfigurationError('The kit configuration must be an object.');
+  }
+  rejectUnknown(config, CONFIG_KEYS, 'kit');
+  const c = config as Record<string, unknown>;
+  const fail = (message: string): never => {
+    throw new InvalidConfigurationError(message);
+  };
+  if (c['builtIns'] !== undefined && typeof c['builtIns'] !== 'boolean') {
+    fail('Kit option "builtIns" must be a boolean.');
+  }
+  if (c['defaultEncoder'] !== undefined && typeof c['defaultEncoder'] !== 'string') {
+    fail('Kit option "defaultEncoder" must be a provider id string.');
+  }
+  if (c['onDiagnostic'] !== undefined && typeof c['onDiagnostic'] !== 'function') {
+    fail('Kit option "onDiagnostic" must be a function.');
+  }
+  if (c['plugins'] !== undefined && !Array.isArray(c['plugins'])) {
+    fail('Kit option "plugins" must be an array.');
+  }
+  const providers = c['providers'];
+  if (providers !== undefined) {
+    if (typeof providers !== 'object' || providers === null) {
+      fail('Kit option "providers" must be an object.');
+    }
+    rejectUnknown(providers as object, ['encoders', 'renderers', 'exporters'], 'providers');
+    for (const [key, list] of Object.entries(providers as Record<string, unknown>)) {
+      if (list !== undefined && !Array.isArray(list)) {
+        fail(`Kit option "providers.${key}" must be an array.`);
+      }
+    }
+  }
+  const routes = c['routes'];
+  if (routes !== undefined) {
+    if (typeof routes !== 'object' || routes === null || Array.isArray(routes)) {
+      fail('Kit option "routes" must be an object keyed by format.');
+    }
+    for (const [format, route] of Object.entries(routes as Record<string, unknown>)) {
+      if (typeof route !== 'object' || route === null) {
+        fail(`Kit route "${format}" must be an object.`);
+      }
+      rejectUnknown(route as object, ['renderer', 'exporter'], `route "${format}"`);
+    }
+  }
+  const limits = c['limits'];
+  if (limits !== undefined) {
+    if (typeof limits !== 'object' || limits === null)
+      fail('Kit option "limits" must be an object.');
+    rejectUnknown(limits as object, LIMIT_KEYS, 'limits');
+    for (const [key, value] of Object.entries(limits as Record<string, unknown>)) {
+      if (
+        value !== undefined &&
+        !(typeof value === 'number' && Number.isSafeInteger(value) && value >= 1)
+      ) {
+        fail(`Limit "${key}" must be a positive integer.`);
+      }
+    }
+  }
+  const kanji = c['kanji'];
+  if (
+    kanji !== undefined &&
+    (typeof kanji !== 'object' ||
+      kanji === null ||
+      typeof (kanji as { shiftJisCode?: unknown }).shiftJisCode !== 'function')
+  ) {
+    fail('Kit option "kanji" must be a KanjiMapper (an object with a shiftJisCode function).');
+  }
+  return config;
+}
+
 function runPlugins(plugins: readonly Plugin[]): {
   encoders: EncoderProvider[];
   renderers: RendererProvider[];
@@ -107,7 +202,8 @@ function runPlugins(plugins: readonly Plugin[]): {
  * different providers in the same process, and concurrent requests cannot
  * affect each other. Configuration is validated here, not on first use.
  */
-export function createQRCodeKit(config: QRCodeKitConfig = {}): QRCodeKit {
+export function createQRCodeKit(rawConfig: QRCodeKitConfig = {}): QRCodeKit {
+  const config = validateConfig(rawConfig);
   const builtIns = config.builtIns === false ? undefined : createBuiltInProviders(config.kanji);
   const fromPlugins = runPlugins(config.plugins ?? []);
 

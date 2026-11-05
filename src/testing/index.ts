@@ -234,6 +234,9 @@ const renderOptions = (overrides: Partial<RenderOptions> = {}): RenderOptions =>
     dark: { r: 0, g: 0, b: 0, a: 255 },
     light: { r: 255, g: 255, b: 255, a: 255 },
     invert: false,
+    moduleShape: 'square',
+    gradient: undefined,
+    logo: undefined,
     maxPixels: 16_777_216,
     ...overrides,
   });
@@ -300,6 +303,46 @@ export async function checkRendererProvider(
           ),
           'invert must affect the output',
         );
+      },
+    ],
+    [
+      'draws every module shape it claims',
+      async () => {
+        if (provider.capabilities.produces === 'canvas') return;
+        const flat = await render(renderOptions());
+        for (const shape of provider.capabilities.moduleShapes) {
+          if (shape === 'square') continue;
+          ensure(
+            !same(await render(renderOptions({ moduleShape: shape })), flat),
+            `moduleShape "${shape}" must change the output`,
+          );
+        }
+      },
+    ],
+    [
+      'draws a gradient and a logo when it claims them',
+      async () => {
+        if (provider.capabilities.produces === 'canvas') return;
+        const flat = await render(renderOptions());
+        if (provider.capabilities.gradients) {
+          const gradient = {
+            type: 'linear' as const,
+            from: { r: 0, g: 0, b: 0, a: 255 },
+            to: { r: 80, g: 0, b: 160, a: 255 },
+            angle: 45,
+          };
+          ensure(
+            !same(await render(renderOptions({ gradient })), flat),
+            'a gradient must change the output',
+          );
+        }
+        if (provider.capabilities.logo) {
+          const logo = { href: 'data:image/png;base64,iVBORw0KGgo=', size: 0.1, margin: 0 };
+          ensure(
+            !same(await render(renderOptions({ logo })), flat),
+            'a logo must change the output',
+          );
+        }
       },
     ],
     [

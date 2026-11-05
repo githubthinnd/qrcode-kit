@@ -1,4 +1,5 @@
 import type { Charset } from '../contracts/encoder.js';
+import type { ModuleShape } from '../contracts/renderer.js';
 import type { ErrorCorrectionLevel, MaskPattern } from '../domain/model.js';
 import type { Segment } from '../domain/segment.js';
 
@@ -44,6 +45,32 @@ export interface AppearanceOptions {
   readonly light?: string;
   /** Swap dark and light. */
   readonly invert?: boolean;
+  /**
+   * Shape of the modules: `'square'` (default), `'rounded'` or `'dots'`. Styling options
+   * (`moduleShape`, `gradient`, `logo`) need a renderer that supports them; the built-in SVG
+   * renderer does, raster renderers reject them.
+   */
+  readonly moduleShape?: ModuleShape;
+  /** A gradient instead of the flat `dark` colour. Cannot be combined with `dark` or `invert`. */
+  readonly gradient?: {
+    readonly from: string;
+    readonly to: string;
+    /** Default `'linear'`. */
+    readonly type?: 'linear' | 'radial';
+    /** Degrees for a linear gradient, 0–360. Default 45. */
+    readonly angle?: number;
+  };
+  /**
+   * A logo in the centre: `href` must be a base64 `data:image/png|jpeg|webp|gif|svg+xml` URL.
+   * `size` is its width as a fraction of the symbol (0.05–0.3, default 0.2) and `margin` the
+   * modules cleared around it (0–4, default 1). The cleared area must stay within what the error
+   * correction level can recover; when `ecc` is not set, level `'H'` is used.
+   */
+  readonly logo?: {
+    readonly href: string;
+    readonly size?: number;
+    readonly margin?: number;
+  };
 }
 
 /** Per-operation provider selection by id. */
@@ -98,5 +125,8 @@ export const APPEARANCE_OPTION_KEYS: readonly string[] = [
   'dark',
   'light',
   'invert',
+  'moduleShape',
+  'gradient',
+  'logo',
 ];
 export const OUTPUT_OPTION_KEYS: readonly string[] = ['format', 'quality', 'path', 'providers'];

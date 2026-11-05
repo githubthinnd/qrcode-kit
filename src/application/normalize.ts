@@ -1,4 +1,5 @@
 import type { Diagnostic, Rgba } from '../contracts/common.js';
+import type { GradientSpec, LogoSpec, ModuleShape } from '../contracts/renderer.js';
 import type { EncodeInput, EncodeRequest, StructuredAppendRequest } from '../contracts/encoder.js';
 import { InvalidConfigurationError, InvalidInputError } from '../domain/errors.js';
 import {
@@ -40,6 +41,10 @@ export interface Requirements {
   readonly colors: boolean;
   readonly quality: boolean;
   readonly path: boolean;
+  /** Styling a renderer must support: a non-square shape, a gradient, a logo. */
+  readonly shape: ModuleShape;
+  readonly gradient: boolean;
+  readonly logo: boolean;
 }
 
 export interface ResolvedAppearance {
@@ -49,6 +54,9 @@ export interface ResolvedAppearance {
   readonly dark: Rgba;
   readonly light: Rgba;
   readonly invert: boolean;
+  readonly moduleShape: ModuleShape;
+  readonly gradient: GradientSpec | undefined;
+  readonly logo: LogoSpec | undefined;
 }
 
 export interface ResolvedOutput {
@@ -134,6 +142,113 @@ function booleanOption(value: unknown, name: string): boolean {
   return value;
 }
 
+const MODULE_SHAPES: readonly ModuleShape[] = ['square', 'rounded', 'dots'];
+
+function resolveModuleShape(value: unknown): ModuleShape {
+  if (value === undefined) return 'square';
+  if (typeof value === 'string' && (MODULE_SHAPES as readonly string[]).includes(value)) {
+    return value as ModuleShape;
+  }
+  throw new InvalidInputError('Option "moduleShape" must be "square", "rounded" or "dots".', {
+    details: { option: 'moduleShape' },
+  });
+}
+
+function knownKeys(value: object, allowed: readonly string[], option: string): void {
+  const unknown = Object.keys(value).filter((key) => !allowed.includes(key));
+  if (unknown.length > 0) {
+    throw new InvalidConfigurationError(
+      `Unknown "${option}" option${unknown.length > 1 ? 's' : ''}: ${unknown.join(', ')}. Options are never ignored silently.`,
+      { details: { options: unknown.join(', ') } },
+    );
+  }
+}
+
+function resolveGradient(
+  request: AppearanceOptions,
+  warnings: Diagnostic[],
+  light: Rgba,
+): GradientSpec | undefined {
+  const value: unknown = request.gradient;
+  if (value === undefined) return undefined;
+  if (typeof value !== 'object' || value === null) {
+    throw new InvalidInputError(
+      'Option "gradient" must be an object { from, to, type?, angle? }.',
+      {
+        details: { option: 'gradient' },
+      },
+    );
+  }
+  knownKeys(value, ['from', 'to', 'type', 'angle'], 'gradient');
+  if (request.dark !== undefined) {
+    throw new InvalidConfigurationError(
+      'Options "gradient" and "dark" are mutually exclusive: the gradient replaces the dark colour.',
+    );
+  }
+  if (request.invert === true) {
+    throw new InvalidConfigurationError('A "gradient" cannot be combined with "invert".');
+  }
+  const g = value as { from?: unknown; to?: unknown; type?: unknown; angle?: unknown };
+  if (typeof g.from !== 'string' || typeof g.to !== 'string') {
+    throw new InvalidInputError('"gradient.from" and "gradient.to" must be colour strings.', {
+      details: { option: 'gradient' },
+    });
+  }
+  const type = g.type === undefined ? 'linear' : g.type;
+  if (type !== 'linear' && type !== 'radial') {
+    throw new InvalidInputError('"gradient.type" must be "linear" or "radial".', {
+      details: { option: 'gradient.type' },
+    });
+  }
+  const angle = g.angle === undefined ? 45 : integerOption(g.angle, 'gradient.angle', 0, 360);
+  const from = parseColor(g.from, 'gradient.from');
+  const to = parseColor(g.to, 'gradient.to');
+  if (from.a === 0 || to.a === 0) {
+    throw new InvalidInputError('Gradient colours cannot be fully transparent.', {
+      details: { option: 'gradient' },
+    });
+  }
+  if (light.a === 255 && from.a === 255 && to.a === 255) {
+    const weakest = Math.min(contrastRatio(from, light), contrastRatio(to, light));
+    if (weakest < 3) {
+      warnings.push({
+        code: 'LOW_CONTRAST',
+        message:
+          'A gradient stop has less than 3:1 contrast against the light colour; the code may not scan reliably.',
+      });
+    }
+  }
+  return { type, from, to, angle };
+}
+
+const LOGO_HREF = /^data:image\/(?:png|jpeg|webp|gif|svg\+xml);base64,[A-Za-z0-9+/]+={0,2}$/;
+const MAX_LOGO_HREF = 262_144;
+
+function resolveLogo(value: unknown): LogoSpec | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== 'object' || value === null) {
+    throw new InvalidInputError('Option "logo" must be an object { href, size?, margin? }.', {
+      details: { option: 'logo' },
+    });
+  }
+  knownKeys(value, ['href', 'size', 'margin'], 'logo');
+  const l = value as { href?: unknown; size?: unknown; margin?: unknown };
+  if (typeof l.href !== 'string' || l.href.length > MAX_LOGO_HREF || !LOGO_HREF.test(l.href)) {
+    throw new InvalidInputError(
+      `"logo.href" must be a base64 data URL of a png, jpeg, webp, gif or svg image (at most ${String(MAX_LOGO_HREF)} characters).`,
+      { details: { option: 'logo.href' } },
+    );
+  }
+  const size = l.size === undefined ? 0.2 : l.size;
+  if (typeof size !== 'number' || !(size >= 0.05 && size <= 0.3)) {
+    throw new InvalidInputError('"logo.size" must be a number from 0.05 to 0.3.', {
+      details: { option: 'logo.size' },
+    });
+  }
+  const margin = l.margin === undefined ? 1 : integerOption(l.margin, 'logo.margin', 0, 4);
+  return { href: l.href, size, margin };
+}
+
 function resolveAppearance(
   request: AppearanceOptions,
   warnings: Diagnostic[],
@@ -157,6 +272,17 @@ function resolveAppearance(
   const light = parseColor(request.light ?? '#ffffff', 'light');
   const invert = booleanOption(request.invert, 'invert');
 
+  const moduleShape = resolveModuleShape(request.moduleShape);
+  if (moduleShape === 'dots') {
+    warnings.push({
+      code: 'DOT_MODULES',
+      message:
+        'Dot modules are read by fewer scanners than square or rounded modules (jsQR cannot read them). Test with the scanners your audience uses, or choose "rounded".',
+    });
+  }
+  const gradient = resolveGradient(request, warnings, light);
+  const logo = resolveLogo(request.logo);
+
   const shownDark = invert ? light : dark;
   const shownLight = invert ? dark : light;
   if (shownDark.a === 255 && shownLight.a === 255) {
@@ -176,7 +302,7 @@ function resolveAppearance(
     }
   }
   return {
-    appearance: { quietZone, scale, size, dark, light, invert },
+    appearance: { quietZone, scale, size, dark, light, invert, moduleShape, gradient, logo },
     explicitColors: request.dark !== undefined || request.light !== undefined,
   };
 }
@@ -230,6 +356,69 @@ function segmentLength(segment: Segment): number {
     default:
       return 1;
   }
+}
+
+const DATA_MODES: readonly string[] = ['numeric', 'alphanumeric', 'byte', 'kanji'];
+
+/** Shape of every segment, and the FNC1 rules of ISO/IEC 18004 §7.4.8 that do not depend on the encoder. */
+function assertSegmentShapes(segments: readonly Segment[]): void {
+  let fnc1 = 0;
+  let sawData = false;
+  (segments as readonly unknown[]).forEach((raw, index) => {
+    const at = `Segment ${String(index)}`;
+    if (typeof raw !== 'object' || raw === null) {
+      throw new InvalidInputError(`${at} must be an object such as segment.numeric("123").`, {
+        details: { segment: index },
+      });
+    }
+    const item = raw as Record<string, unknown>;
+    const mode = item['mode'];
+    const need = (ok: boolean, what: string): void => {
+      if (!ok) {
+        throw new InvalidInputError(`${at} (${String(mode)}) needs ${what}.`, {
+          details: { segment: index },
+        });
+      }
+    };
+    switch (mode) {
+      case 'numeric':
+      case 'alphanumeric':
+      case 'kanji':
+        need(typeof item['text'] === 'string', 'a "text" string');
+        break;
+      case 'byte':
+        need(item['bytes'] instanceof Uint8Array, 'a "bytes" Uint8Array');
+        break;
+      case 'eci':
+        need(typeof item['assignment'] === 'number', 'an "assignment" number');
+        break;
+      case 'fnc1-first':
+        break;
+      case 'fnc1-second':
+        need(typeof item['applicationIndicator'] === 'number', 'an "applicationIndicator" number');
+        break;
+      default:
+        throw new InvalidInputError(
+          `${at} has an unknown mode. Use numeric, alphanumeric, byte, kanji, eci, fnc1-first or fnc1-second.`,
+          { details: { segment: index } },
+        );
+    }
+    if (typeof mode === 'string' && DATA_MODES.includes(mode)) sawData = true;
+    if (mode === 'fnc1-first' || mode === 'fnc1-second') {
+      fnc1++;
+      if (fnc1 > 1) {
+        throw new InvalidInputError(
+          `${at}: a symbol can carry only one FNC1 marker (first or second position, not both).`,
+          { details: { segment: index } },
+        );
+      }
+      if (sawData) {
+        throw new InvalidInputError(`${at}: an FNC1 marker must come before any data segment.`, {
+          details: { segment: index },
+        });
+      }
+    }
+  });
 }
 
 function assertSegmentsNotEmpty(segments: readonly Segment[]): void {
@@ -313,6 +502,7 @@ export function normalizeSymbol(
     const segments = data as readonly Segment[];
     if (segments.length === 0)
       throw new InvalidInputError('"data" must not be an empty segment list.');
+    assertSegmentShapes(segments);
     assertSegmentsNotEmpty(segments);
     checkSize(
       segments.reduce((n, s) => n + segmentLength(s), 0),
@@ -388,7 +578,10 @@ export function normalizeGenerate(
   const { appearance, explicitColors } = resolveAppearance(request, warnings);
   const output = resolveOutput(request);
   return {
-    encode: symbol.request,
+    encode:
+      request.ecc === undefined && request.logo !== undefined
+        ? { ...symbol.request, ecc: 'H' }
+        : symbol.request,
     appearance,
     output,
     requirements: {
@@ -397,6 +590,9 @@ export function normalizeGenerate(
       colors: explicitColors,
       quality: output.quality !== undefined,
       path: output.path !== undefined,
+      shape: appearance.moduleShape,
+      gradient: appearance.gradient !== undefined,
+      logo: appearance.logo !== undefined,
     },
     warnings,
   };
@@ -442,7 +638,7 @@ export function normalizeStructuredAppend(
       data,
       charset,
       symbols,
-      ecc: resolveEcc(request.ecc),
+      ecc: request.ecc === undefined && request.logo !== undefined ? 'H' : resolveEcc(request.ecc),
       minVersion: versions.min,
       maxVersion: versions.max,
       mask,
@@ -456,6 +652,9 @@ export function normalizeStructuredAppend(
       colors: explicitColors,
       quality: output.quality !== undefined,
       path: output.path !== undefined,
+      shape: appearance.moduleShape,
+      gradient: appearance.gradient !== undefined,
+      logo: appearance.logo !== undefined,
     },
     warnings,
   };

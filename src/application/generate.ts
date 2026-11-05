@@ -171,6 +171,16 @@ function missing(
       `exporter "${exporter.id}" has no alpha channel, so transparent colours are not possible (use an opaque colour or another format)`,
     );
   }
+  const shapes = renderer.capabilities.moduleShapes;
+  if (requirements.shape !== 'square' && !shapes.includes(requirements.shape)) {
+    gaps.push(`renderer "${renderer.id}" cannot draw "${requirements.shape}" modules`);
+  }
+  if (requirements.gradient && !renderer.capabilities.gradients) {
+    gaps.push(`renderer "${renderer.id}" does not support gradients`);
+  }
+  if (requirements.logo && !renderer.capabilities.logo) {
+    gaps.push(`renderer "${renderer.id}" does not support a logo`);
+  }
   if (requirements.quality && !exporter.capabilities.quality) {
     gaps.push(`exporter "${exporter.id}" does not support the "quality" option`);
   }

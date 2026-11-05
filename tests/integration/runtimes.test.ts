@@ -181,6 +181,9 @@ describe('browser runtime (canvas double; no DOM in this process)', () => {
       dark: { r: 0, g: 0, b: 0, a: 255 },
       light: { r: 255, g: 255, b: 255, a: 255 },
       invert: false,
+      moduleShape: 'square',
+      gradient: undefined,
+      logo: undefined,
       maxPixels: 1e9,
     });
     expect(out).toMatchObject({ kind: 'canvas', width: (matrix.size + 4) * 5 });

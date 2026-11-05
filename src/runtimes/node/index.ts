@@ -4,7 +4,7 @@ import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import { PROVIDER_API_VERSION } from '../../contracts/common.js';
 import type { ExportOptions, ExportedResult, ExporterProvider } from '../../contracts/exporter.js';
 import type { RenderedKind, RenderedOutput } from '../../contracts/renderer.js';
-import { ExportError } from '../../domain/errors.js';
+import { ExportError, InvalidConfigurationError } from '../../domain/errors.js';
 import { encodeBilevelPng } from '../../formats/png.js';
 
 declare module '../../contracts/exporter.js' {
@@ -117,6 +117,26 @@ export interface FileExporterOptions {
 
 /** `png-file`, `svg-file` and `text-file`: write the output to `path` and return `{ path, bytes }`. */
 export function createFileExporters(options: FileExporterOptions = {}): ExporterProvider[] {
+  if (typeof options !== 'object' || options === null) {
+    throw new InvalidConfigurationError('The file exporter options must be an object.');
+  }
+  const unknown = Object.keys(options).filter(
+    (key) => key !== 'baseDir' && key !== 'createDirectories',
+  );
+  if (unknown.length > 0) {
+    throw new InvalidConfigurationError(
+      `Unknown file exporter option${unknown.length > 1 ? 's' : ''}: ${unknown.join(', ')}. Options are never ignored silently.`,
+    );
+  }
+  if (
+    options.baseDir !== undefined &&
+    (typeof options.baseDir !== 'string' || options.baseDir === '')
+  ) {
+    throw new InvalidConfigurationError('The "baseDir" option must be a non-empty string.');
+  }
+  if (options.createDirectories !== undefined && typeof options.createDirectories !== 'boolean') {
+    throw new InvalidConfigurationError('The "createDirectories" option must be a boolean.');
+  }
   const root = options.baseDir === undefined ? undefined : resolve(options.baseDir);
 
   const destination = (path: string | undefined): string => {
