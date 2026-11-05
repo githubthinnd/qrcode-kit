@@ -17,12 +17,12 @@
   "author": "Nhữ Duy Thìn",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/githubthinnd/qrcode-kit.git"
+    "url": "git+https://github.com/githubthinnd/qrcode-toolkit.git"
   },
   "bugs": {
-    "url": "https://github.com/githubthinnd/qrcode-kit/issues"
+    "url": "https://github.com/githubthinnd/qrcode-toolkit/issues"
   },
-  "homepage": "https://github.com/githubthinnd/qrcode-kit#readme",
+  "homepage": "https://github.com/githubthinnd/qrcode-toolkit#readme",
   "type": "module",
   "sideEffects": false,
   "exports": {
