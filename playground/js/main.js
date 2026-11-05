@@ -3,6 +3,7 @@ import { createBrowserKit } from '../../dist/browser.js';
 import { createJisX0208KanjiMapper } from '../../dist/kanji.js';
 import { PRESETS } from './presets.js';
 import { DEFAULTS, FORMATS, buildRequest, toTypeScript } from './request.js';
+import { enhanceAllSelects } from './select.js';
 import { decodeAll, rasterize } from './decoder.js';
 import { buildTests, environment, runSelfTest } from './selftest.js';
 
@@ -1003,6 +1004,8 @@ function init() {
     option.textContent = preset.label;
     presetSelect.append(option);
   }
+
+  enhanceAllSelects();
 
   const fromHash = location.hash.startsWith('#s=') ? decodeHash(location.hash.slice(3)) : null;
   writeState(fromHash ?? DEFAULTS);
