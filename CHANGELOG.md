@@ -8,7 +8,8 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
-- Framework packages in an npm workspace (`packages/`): `qrcode-toolkit-react` (component usable in Server Components, `useQRCode`), `qrcode-toolkit-vue` (component with a fallback slot, `useQRCode`) and `qrcode-toolkit-svelte` (Svelte 5 component). They are tested against React 19, Vue 3 and Svelte 5 and verified from their packed tarballs by `npm run verify:frameworks`.
+- Framework packages in an npm workspace (`packages/`): `qrcode-toolkit-react` (component usable in Server Components, `useQRCode`), `qrcode-toolkit-vue` (component with a fallback slot, `useQRCode`) and `qrcode-toolkit-svelte` (Svelte 5 component) and `qrcode-toolkit-angular` (standalone component with Angular SSR support and a `qrCode()` signal helper, built with ng-packagr). They are tested against React 19, Vue 3, Svelte 5 and Angular 22 and verified from their packed tarballs by `npm run verify:frameworks`.
+- `canvas` output format in the browser kit: `kit.generate({ data, format: 'canvas' })` returns the canvas element the renderer drew (new `createCanvasExporter`, `CanvasHandle` type).
 - Single-file builds for `<script>` tags and CDNs: `dist/bundles/qrcode-toolkit.min.js` (global `QRCodeToolkit`) and `dist/bundles/qrcode-toolkit.esm.min.js`; `unpkg` and `jsdelivr` fields point at the script build.
 - SVG styling: `moduleShape` (`square`, `rounded`, `dots`), `gradient` (linear or radial) and `logo` (base64 image data URL). The renderer clears the modules under the logo, refuses a logo that would touch a function pattern or hide more than half of what the error correction level recovers, and defaults to level `H`. Raster renderers reject these options. New `DOT_MODULES` warning.
 - Renderer contract: `RenderOptions` carries `moduleShape`, `gradient` and `logo`; `moduleShapes` capability lists the shapes a renderer draws; the conformance kit checks the styles a renderer claims.

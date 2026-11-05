@@ -11,3 +11,4 @@ coverage/
 .env.*
 packages/*/dist
 packages/*/tests/.build
+packages/angular/dist-tsc

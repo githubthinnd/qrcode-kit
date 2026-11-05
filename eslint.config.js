@@ -116,6 +116,8 @@ export default tseslint.config(
           'DOMParser',
           'ClipboardItem',
           'FileReader',
+          'HTMLCanvasElement',
+          'OffscreenCanvas',
           'TextEncoder',
           'TextDecoder',
           'createImageBitmap',

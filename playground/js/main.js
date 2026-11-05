@@ -201,6 +201,7 @@ const EXTENSIONS = {
   png: ['png', 'image/png'],
   'png-data-url': ['png', 'image/png'],
   text: ['txt', 'text/plain'],
+  canvas: ['png', 'image/png'],
   'png-blob': ['png', 'image/png'],
   'jpeg-blob': ['jpg', 'image/jpeg'],
   'webp-blob': ['webp', 'image/webp'],
@@ -271,6 +272,8 @@ async function toBlob(result) {
       return new Blob([value], { type: 'image/png' });
     case 'text':
       return new Blob([value], { type: 'text/plain' });
+    case 'canvas':
+      return await new Promise((resolve) => value.toBlob(resolve, 'image/png'));
     case 'svg-data-url':
     case 'png-data-url':
       return await (await fetch(value)).blob();

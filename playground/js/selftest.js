@@ -141,6 +141,19 @@ export function buildTests() {
       return `${result.value.size} bytes`;
     });
   }
+  add('Formats', 'canvas format returns the real canvas element, drawn on', async () => {
+    const { value } = await kit.generate({ data: 'x', format: 'canvas', scale: 5 });
+    ok(value instanceof HTMLCanvasElement || value instanceof OffscreenCanvas, 'not a canvas');
+    ok(
+      value.width === 29 * 5 && value.height === 29 * 5,
+      `canvas is ${value.width}×${value.height}`,
+    );
+    const ctx = value.getContext('2d');
+    const finder = ctx.getImageData(4 * 5 + 2, 4 * 5 + 2, 1, 1).data;
+    const quiet = ctx.getImageData(2, 2, 1, 1).data;
+    ok(finder[0] < 40 && finder[3] === 255, `finder pixel is rgba(${Array.from(finder)})`);
+    ok(quiet[0] > 215 && quiet[3] === 255, `quiet pixel is rgba(${Array.from(quiet)})`);
+  });
   add('Formats', 'canvas renderer paints finder patterns dark and quiet zone light', async () => {
     const { value } = await kit.generate({
       data: 'x',

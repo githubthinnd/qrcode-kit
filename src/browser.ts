@@ -3,6 +3,7 @@ import { createBrowserProviders, type CanvasOptions } from './runtimes/browser/i
 
 export {
   createBlobExporters,
+  createCanvasExporter,
   createBrowserProviders,
   createCanvasRenderer,
 } from './runtimes/browser/index.js';

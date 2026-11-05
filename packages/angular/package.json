@@ -1,0 +1,52 @@
+{
+  "name": "qrcode-toolkit-angular",
+  "version": "0.1.0",
+  "description": "Angular standalone component and signal helper for qrcode-toolkit: zero-dependency QR codes that render on the server and in the browser.",
+  "keywords": [
+    "qrcode",
+    "qr-code",
+    "qrcode-generator",
+    "angular",
+    "ssr",
+    "svg",
+    "signals",
+    "typescript",
+    "qrcode-toolkit"
+  ],
+  "license": "MIT",
+  "author": "Nhữ Duy Thìn",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/githubthinnd/qrcode-toolkit.git",
+    "directory": "packages/angular"
+  },
+  "bugs": {
+    "url": "https://github.com/githubthinnd/qrcode-toolkit/issues"
+  },
+  "homepage": "https://github.com/githubthinnd/qrcode-toolkit/tree/master/packages/angular#readme",
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "ng-packagr -p ng-package.json -c tsconfig.lib.json"
+  },
+  "peerDependencies": {
+    "@angular/core": ">=19.0.0",
+    "qrcode-toolkit": ">=0.1.0"
+  },
+  "dependencies": {
+    "tslib": "^2.3.0"
+  },
+  "devDependencies": {
+    "@angular/common": "^22.2.0",
+    "@angular/compiler": "^22.2.0",
+    "@angular/compiler-cli": "^22.2.0",
+    "@angular/core": "^22.2.0",
+    "@angular/platform-browser": "^22.2.0",
+    "@angular/platform-server": "^22.2.0",
+    "ng-packagr": "^22.2.0",
+    "rxjs": "^7.8.0"
+  }
+}

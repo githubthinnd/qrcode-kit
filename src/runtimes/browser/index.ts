@@ -1,5 +1,10 @@
 import { PROVIDER_API_VERSION, type Rgba } from '../../contracts/common.js';
-import type { BlobLike, ExportOptions, ExporterProvider } from '../../contracts/exporter.js';
+import type {
+  BlobLike,
+  ExportOptions,
+  ExportedResult,
+  ExporterProvider,
+} from '../../contracts/exporter.js';
 import type {
   BitmapOutput,
   CanvasOutput,
@@ -21,6 +26,8 @@ declare module '../../contracts/exporter.js' {
     'png-blob': BlobLike;
     'jpeg-blob': BlobLike;
     'webp-blob': BlobLike;
+    /** The canvas the renderer drew on: an `HTMLCanvasElement` or an `OffscreenCanvas`. */
+    canvas: CanvasLike;
   }
 }
 
@@ -262,10 +269,40 @@ export function createBlobExporters(options: CanvasOptions = {}): ExporterProvid
   return BLOB_FORMATS.map((spec) => createBlobExporter(spec, options));
 }
 
+/**
+ * `canvas`: hands over the canvas the browser renderer drew, so it can be inserted into the page,
+ * drawn onto another canvas or encoded in a way these exporters do not offer.
+ */
+export function createCanvasExporter(): ExporterProvider {
+  return {
+    id: 'qrcode-toolkit/browser/canvas-export',
+    apiVersion: PROVIDER_API_VERSION,
+    capabilities: {
+      accepts: ['canvas'],
+      formats: ['canvas'],
+      runtimes: ['browser'],
+      requiresPath: false,
+      quality: false,
+      alpha: true,
+      sync: true,
+    },
+    export(rendered: RenderedOutput, format: string): ExportedResult {
+      if (rendered.kind !== 'canvas') {
+        throw new ExportError(`The canvas exporter cannot export "${rendered.kind}" output.`);
+      }
+      // Not an image type: the value is the live drawing surface itself.
+      return { format, mimeType: 'application/x-canvas', value: rendered.canvas as CanvasLike };
+    },
+  };
+}
+
 /** All browser providers. */
 export function createBrowserProviders(options: CanvasOptions = {}): {
   readonly renderers: readonly RendererProvider[];
   readonly exporters: readonly ExporterProvider[];
 } {
-  return { renderers: [createCanvasRenderer(options)], exporters: createBlobExporters(options) };
+  return {
+    renderers: [createCanvasRenderer(options)],
+    exporters: [...createBlobExporters(options), createCanvasExporter()],
+  };
 }

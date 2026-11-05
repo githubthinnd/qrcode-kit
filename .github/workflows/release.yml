@@ -55,6 +55,9 @@ jobs:
             if npm view "$name@$version" version >/dev/null 2>&1; then
               echo "$name@$version is already published"
             else
-              npm publish --workspace "$name" --provenance --access public
+              # ng-packagr writes the publishable package to dist/
+              target="$dir"
+              if [ -f "$dir/ng-package.json" ]; then target="$dir/dist"; fi
+              npm publish "$target" --provenance --access public
             fi
           done

@@ -35,7 +35,13 @@ export interface FormatValueMap {
   text: string;
 }
 
-export type ExportedValue = string | Uint8Array | BlobLike | FileResult;
+/** A drawing surface returned by browser exporters (an `HTMLCanvasElement` or `OffscreenCanvas`). */
+export interface CanvasHandle {
+  readonly width: number;
+  readonly height: number;
+}
+
+export type ExportedValue = string | Uint8Array | BlobLike | FileResult | CanvasHandle;
 
 /** The value type of a format; unknown (custom) formats yield {@link ExportedValue}. */
 export type FormatValue<F extends string> = F extends keyof FormatValueMap

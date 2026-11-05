@@ -41,9 +41,15 @@ async function check(name, fn) {
     console.log(`  ok   ${name}${detail ? ` (${detail})` : ''}`);
   } catch (error) {
     results.push({ name, ok: false });
-    console.log(
-      `  FAIL ${name}\n       ${String(error instanceof Error ? error.message : error).split('\n')[0]}`,
-    );
+    // A failed child process carries its stderr; show the useful tail of it.
+    const detail =
+      error instanceof Error &&
+      'stderr' in error &&
+      typeof error.stderr === 'string' &&
+      error.stderr
+        ? error.stderr.trim().split('\n').slice(-12).join('\n       ')
+        : String(error instanceof Error ? error.message : error).split('\n')[0];
+    console.log(`  FAIL ${name}\n       ${detail}`);
   }
 }
 const expect = (cond, message) => {
@@ -74,7 +80,18 @@ try {
       root,
     ),
   );
-  const adapterTarballs = adapterPack.map((entry) => join(work, entry.filename));
+  // The Angular package is published from the folder ng-packagr writes, not from its source folder.
+  const angularPack = JSON.parse(
+    sh(
+      'npm',
+      ['pack', '--json', '--pack-destination', work, join(root, 'packages/angular/dist')],
+      root,
+    ),
+  );
+  const adapterTarballs = [
+    ...adapterPack.map((entry) => join(work, entry.filename)),
+    join(work, angularPack[0].filename),
+  ];
   sh('npm', [
     'install',
     tarball,
@@ -84,6 +101,12 @@ try {
     'vue@3',
     '@vue/compiler-sfc@3',
     'svelte@5',
+    '@angular/core@22',
+    '@angular/common@22',
+    '@angular/compiler@22',
+    '@angular/platform-browser@22',
+    '@angular/platform-server@22',
+    'rxjs@7',
     '--ignore-scripts',
     '--no-audit',
     '--no-fund',
@@ -249,6 +272,36 @@ try {
       );
     },
   );
+
+  await check('qrcode-toolkit-angular: component renders with Angular SSR', () => {
+    writeFileSync(
+      join(work, 'adapter-angular.mjs'),
+      `import '@angular/compiler';
+       import { Component, provideZonelessChangeDetection } from '@angular/core';
+       import { bootstrapApplication } from '@angular/platform-browser';
+       import { renderApplication } from '@angular/platform-server';
+       import { QRCodeComponent, generateQRCode, qrCode } from 'qrcode-toolkit-angular';
+
+       const App = class {};
+       Component({
+         selector: 'app-root',
+         imports: [QRCodeComponent],
+         template: '<qr-code value="${URL_TEXT}" label="Scan to join" [options]="{ moduleShape: \\'rounded\\' }" /><qr-code value="" />',
+       })(App);
+       const html = await renderApplication(
+         (context) =>
+           bootstrapApplication(App, { providers: [provideZonelessChangeDetection()] }, context),
+         { document: '<app-root></app-root>' },
+       );
+       console.log(JSON.stringify({ html, version: generateQRCode('x').matrix?.version, helper: typeof qrCode }));`,
+    );
+    // Angular prints a development-mode notice first; the result is the last line.
+    const out = JSON.parse(sh('node', ['adapter-angular.mjs']).trim().split('\n').pop());
+    expectImg(out.html, 'Scan to join');
+    expect(!/src="unsafe:/.test(out.html), 'Angular sanitised the data URL');
+    expect((out.html.match(/<img/g) ?? []).length === 1, 'the empty value must render no image');
+    expect(out.version === 1 && out.helper === 'function', 'helpers missing');
+  });
 
   await check('adapter packages pass publint (as published)', () => {
     for (const tarballPath of adapterTarballs) {

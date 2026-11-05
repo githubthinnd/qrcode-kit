@@ -87,6 +87,7 @@ matrix.get(0, 0); // true when the module at x=0, y=0 is dark
 | A file or HTTP response on the server          | `png-buffer` / `svg-buffer` (`/node`)     |
 | Save to disk                                   | `png-file` / `svg-file` (`/node`)         |
 | A downloadable image in the browser            | `png-blob`, `webp-blob` (`/browser`)      |
+| A canvas to insert or draw on                  | `canvas` (`/browser`)                     |
 | A terminal or log                              | `text`                                    |
 | Custom drawing                                 | `kit.encode(...)` and read the `QRMatrix` |
 
@@ -96,14 +97,15 @@ matrix.get(0, 0); // true when the module at x=0, y=0 is dark
 
 The core stays framework-free; these small packages (in [`packages/`](packages), versioned and published separately) wrap it for the frameworks that have a component model. They are published together with `qrcode-toolkit` 0.2.
 
-| Framework           | Package                                              | What you get                                                          |
-| ------------------- | ---------------------------------------------------- | --------------------------------------------------------------------- |
-| React, Next.js      | [`qrcode-toolkit-react`](packages/react/README.md)   | `<QRCode>` (also in Server Components), `useQRCode`, `generateQRCode` |
-| Vue 3, Nuxt         | [`qrcode-toolkit-vue`](packages/vue/README.md)       | `<QRCode>` with a `fallback` slot, `useQRCode` composable             |
-| Svelte 5, SvelteKit | [`qrcode-toolkit-svelte`](packages/svelte/README.md) | `<QRCode>` with a `fallback` snippet, `generateQRCode`                |
+| Framework           | Package                                                | What you get                                                              |
+| ------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------- |
+| React, Next.js      | [`qrcode-toolkit-react`](packages/react/README.md)     | `<QRCode>` (also in Server Components), `useQRCode`, `generateQRCode`     |
+| Vue 3, Nuxt         | [`qrcode-toolkit-vue`](packages/vue/README.md)         | `<QRCode>` with a `fallback` slot, `useQRCode` composable                 |
+| Svelte 5, SvelteKit | [`qrcode-toolkit-svelte`](packages/svelte/README.md)   | `<QRCode>` with a `fallback` snippet, `generateQRCode`                    |
+| Angular 19+         | [`qrcode-toolkit-angular`](packages/angular/README.md) | standalone `<qr-code>` (works with Angular SSR), `qrCode()` signal helper |
 
 ```bash
-npm install qrcode-toolkit-react qrcode-toolkit   # or -vue / -svelte
+npm install qrcode-toolkit-react qrcode-toolkit   # or -vue / -svelte / -angular
 ```
 
 ```tsx
@@ -112,13 +114,13 @@ import { QRCode } from 'qrcode-toolkit-react';
 <QRCode value="https://example.com/invite/42" label="Scan to join" moduleShape="rounded" />;
 ```
 
-Every package accepts all `qrcode-toolkit` options as props, renders the same markup on the server and in the browser, shows a fallback for content that cannot be encoded and throws on programming mistakes. There is no Angular package: an Angular library must be built with Angular's own packager, so Angular uses the snippet below. Anything else can follow the snippets in this section.
+Every package accepts all `qrcode-toolkit` options as props, renders the same markup on the server and in the browser, shows a fallback for content that cannot be encoded and throws on programming mistakes. Anything else (Astro, Solid, Lit, …) can follow the snippets in this section.
 
 ### Copy-paste guides
 
 The guides below show the same integrations without a package. Create the kit **once at module level**, derive the image source from your props, and render an `<img>`.
 
-> The React, Vue 3, Svelte 5 and Next.js Route Handler snippets below are executed from this README by `npm run verify:frameworks` (server-side rendering with React 19, Vue 3 and Svelte 5, and the handler called with a Web `Request`); so are the packed adapter packages. The Angular, Astro, Nuxt and SvelteKit snippets use only the documented API but are not executed by a test; adapt them to your versions.
+> The React, Vue 3, Svelte 5 and Next.js Route Handler snippets below are executed from this README by `npm run verify:frameworks` (server-side rendering with React 19, Vue 3 and Svelte 5, and the handler called with a Web `Request`); so are the packed adapter packages, including Angular's with Angular SSR. The copy-paste Angular, Astro, Nuxt and SvelteKit snippets use only the documented API but are not executed by a test; adapt them to your versions.
 
 <details>
 <summary><b>React</b> (Vite, Create React App, Remix, React Router)</summary>
@@ -694,15 +696,16 @@ Unknown options and options the selected providers cannot honour raise an error;
 
 ### Formats
 
-| Format                               | Value type        | Entry            |
-| ------------------------------------ | ----------------- | ---------------- |
-| `svg`, `svg-data-url`                | `string`          | `qrcode-toolkit` |
-| `png`                                | `Uint8Array`      | `qrcode-toolkit` |
-| `png-data-url`                       | `string`          | `qrcode-toolkit` |
-| `text`                               | `string`          | `qrcode-toolkit` |
-| `png-buffer`, `svg-buffer`           | `Buffer`          | `/node`          |
-| `png-file`, `svg-file`, `text-file`  | `{ path, bytes }` | `/node`          |
-| `png-blob`, `jpeg-blob`, `webp-blob` | `Blob`            | `/browser`       |
+| Format                               | Value type         | Entry            |
+| ------------------------------------ | ------------------ | ---------------- |
+| `svg`, `svg-data-url`                | `string`           | `qrcode-toolkit` |
+| `png`                                | `Uint8Array`       | `qrcode-toolkit` |
+| `png-data-url`                       | `string`           | `qrcode-toolkit` |
+| `text`                               | `string`           | `qrcode-toolkit` |
+| `png-buffer`, `svg-buffer`           | `Buffer`           | `/node`          |
+| `png-file`, `svg-file`, `text-file`  | `{ path, bytes }`  | `/node`          |
+| `png-blob`, `jpeg-blob`, `webp-blob` | `Blob`             | `/browser`       |
+| `canvas`                             | the canvas element | `/browser`       |
 
 ### Entry points
 
@@ -771,7 +774,7 @@ npm run playground        # builds the package and the playground, then serves h
 npm run playground:build  # only writes playground-dist/index.html (one self-contained file)
 ```
 
-A local, offline workbench for the built package: every option, all eight formats, live preview with zoom and download, an **Anatomy** view that colours each module by role, segment and provider details, copy-ready TypeScript for the current settings, shareable links, and a **Self-test** that runs 35 checks in your browser: canvas drawing, each Blob encoder, capability guards, provider precedence, size rounding, a round trip through independent decoders and the styled SVG variants (shapes, gradients, logo) drawn by the browser and decoded back (jsQR, ZXing and the native `BarcodeDetector` when present). "Verify scan" decodes what you see with the same engines. The decoders are development dependencies bundled into the playground only; the library never imports them.
+A local, offline workbench for the built package: every option, all eight formats, live preview with zoom and download, an **Anatomy** view that colours each module by role, segment and provider details, copy-ready TypeScript for the current settings, shareable links, and a **Self-test** that runs 36 checks in your browser: canvas drawing, each Blob encoder, capability guards, provider precedence, size rounding, a round trip through independent decoders and the styled SVG variants (shapes, gradients, logo) drawn by the browser and decoded back (jsQR, ZXing and the native `BarcodeDetector` when present). "Verify scan" decodes what you see with the same engines. The decoders are development dependencies bundled into the playground only; the library never imports them.
 
 ## Quality and verification
 

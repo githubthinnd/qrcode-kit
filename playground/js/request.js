@@ -46,6 +46,7 @@ export const FORMATS = [
   { value: 'png', label: 'png · Uint8Array' },
   { value: 'png-data-url', label: 'png-data-url' },
   { value: 'text', label: 'text · terminal blocks' },
+  { value: 'canvas', label: 'canvas · browser' },
   { value: 'png-blob', label: 'png-blob · browser' },
   { value: 'jpeg-blob', label: 'jpeg-blob · browser' },
   { value: 'webp-blob', label: 'webp-blob · browser' },
