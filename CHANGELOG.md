@@ -8,6 +8,9 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **Micro QR (M1–M4) and rMQR (32 sizes)**: `symbol: 'micro' | 'rmqr'`, version names (`'M3'`, `'R9x59'`), per-symbol levels and defaults, a 2-module default quiet zone and rectangular `QRMatrix` (`width`, `height`, `symbol`, `designation`). Rendered by the SVG, PNG, text and canvas renderers. Verified bit-for-bit against reference symbols from ZXing-C++'s tests and by decoding every version and level with ZXing-C++ (`zxing-wasm`, a development dependency).
+- **`maskScoring: 'fast'`**: optional bit-parallel mask scoring for QR Code, checked against the reference scoring exactly; `maskScoring` capability for encoder providers.
+- Playground: symbol type, version names and mask scoring controls, rectangular Anatomy view, two more self-tests; select boxes restyled with a custom chevron.
 - Framework packages in an npm workspace (`packages/`): `qrcode-toolkit-react` (component usable in Server Components, `useQRCode`), `qrcode-toolkit-vue` (component with a fallback slot, `useQRCode`) and `qrcode-toolkit-svelte` (Svelte 5 component) and `qrcode-toolkit-angular` (standalone component with Angular SSR support and a `qrCode()` signal helper, built with ng-packagr). They are tested against React 19, Vue 3, Svelte 5 and Angular 22 and verified from their packed tarballs by `npm run verify:frameworks`.
 - `qrcode-toolkit/http`: `createQRCodeHandler()`, a ready-made image endpoint (`/api/qr?text=...`) for any framework built on the Fetch API (Next.js, SvelteKit, Astro, Remix, Hono, Nuxt, …), with bounded input, a fixed set of parameters, clear 400/405/422 responses, cache and security headers.
 - `canvas` output format in the browser kit: `kit.generate({ data, format: 'canvas' })` returns the canvas element the renderer drew (new `createCanvasExporter`, `CanvasHandle` type).

@@ -693,9 +693,11 @@ Scanners that support structured append rejoin the parts; others read each part 
 | Option                      | Default        | Meaning                                                                                                                                           |
 | --------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `data`                      | required       | `string`, `Uint8Array`, or an array of explicit segments (`segment.numeric(...)` …)                                                               |
-| `ecc`                       | `'M'`          | Error correction level `'L' \| 'M' \| 'Q' \| 'H'`                                                                                                 |
-| `version`                   | 1–40, smallest | An exact version, or `{ min, max }`                                                                                                               |
+| `symbol`                    | `'qr'`         | `'qr'`, `'micro'` (Micro QR M1–M4) or `'rmqr'` (rectangular, 32 sizes); see [Micro QR and rMQR](#micro-qr-and-rmqr)                               |
+| `ecc`                       | `'M'`          | Error correction level `'L' \| 'M' \| 'Q' \| 'H'` (Micro QR: `L`/`M`/`Q`, default `L`; rMQR: `M`/`H`)                                             |
+| `version`                   | 1–40, smallest | An exact version, or `{ min, max }`; a name such as `'M3'` or `'R9x59'` for the compact symbols                                                   |
 | `mask`                      | `'auto'`       | Mask pattern 0–7, or the lowest-penalty one                                                                                                       |
+| `maskScoring`               | `'standard'`   | `'fast'` scores the eight masks with bit-parallel operations; see [Mask scoring](#mask-scoring)                                                   |
 | `boostEcc`                  | `false`        | Raise the level while the data still fits in the chosen version                                                                                   |
 | `charset`                   | `'utf-8'`      | `'utf-8'` or `'iso-8859-1'` for string data                                                                                                       |
 | `eci`                       | `false`        | `true`: declare the charset of text (ECI 26 / 3). A number: declare that ECI for byte data                                                        |
@@ -774,6 +776,29 @@ kit.encode({ data: '日本語のテキスト', kanji: true }); // Kanji mode: 13
 
 Kanji mode covers exactly the 6 872 JIS X 0208 characters whose Unicode mapping is the same in the Unicode Consortium's table and in Windows-31J. Everything else (including the Windows extensions and seven ambiguous characters such as `～` U+FF5E) is encoded in byte mode, which always round-trips. Without the `/kanji` entry the mapping is derived from the platform's `TextDecoder('shift_jis')`; where that is missing a `RUNTIME_UNAVAILABLE` error points you to the entry.
 
+### Micro QR and rMQR
+
+```ts
+kit.encode({ data: '12345678', symbol: 'micro' }); // Micro QR, smallest of M1–M4 that fits (13 × 13 here)
+kit.encode({ data: 'https://example.com', symbol: 'rmqr' }); // rMQR, smallest of the 32 sizes
+kit.encode({ data: 'HELLO', symbol: 'micro', version: 'M3', ecc: 'Q' });
+kit.encode({ data: 'Shelf 42', symbol: 'rmqr', version: 'R9x59', ecc: 'H' });
+```
+
+- **Micro QR** (ISO/IEC 18004) has one finder pattern and four sizes, 11 to 17 modules. At level `L` it holds up to 5 (M1), 10 (M2), 23 (M3) and 35 (M4) digits. Levels are `L`, `M`, `Q` (only M4 offers `Q`); the default is `L`. A mask can be forced with `mask: 0–3`.
+- **rMQR** (ISO/IEC 23941) is a rectangle from 7 × 43 to 17 × 139 modules, for narrow labels and strips. Levels are `M` (default) and `H`. The standard fixes its mask, so `mask` must stay `auto`; `matrix.mask` reports it.
+- The quiet zone defaults to 2 modules (the standard's minimum); `matrix.width`, `matrix.height` and `matrix.designation` describe the shape. Every renderer draws rectangles; `size` and `scale` apply to the width.
+- Not available for these symbols: `logo` and structured append. Micro QR also rejects `eci` and `fnc1`; rMQR supports them. Kanji mode works in M3, M4 and rMQR.
+- Support in phone cameras is narrower than for QR Code: iOS and Android camera apps read Micro QR and rMQR only in some versions, so test with your target scanners.
+
+### Mask scoring
+
+A QR Code encoder builds the symbol with all eight masks and keeps the one with the lowest penalty. `maskScoring: 'fast'` computes the same four penalty rules with word-parallel bit operations and an early exit. On a modern laptop it cuts the mask-selection time by roughly 25% (version 3) to 40% (version 20–40), which is 15–30% of the whole encode; `node bench/bench.mjs` prints the comparison for your machine. It is optional and applies to `symbol: 'qr'` with `mask: 'auto'`; both settings are rejected where they cannot apply. The version and level never change; in a seeded sample of 150 random inputs it picks the same mask as the standard scoring in at least 96% of cases, and a different mask only changes which equally readable pattern is drawn.
+
+```ts
+kit.encode({ data: longText, maskScoring: 'fast' });
+```
+
 ### GS1 and structured append
 
 `fnc1: 'first'` marks GS1 formatted data. `generateStructuredAppend` takes `string` or `Uint8Array` data only; `eci`, `kanji`, `fnc1` and segment arrays are rejected there. Everything else (`ecc`, `version`, `mask`, `boostEcc`, `charset`, appearance, `format`) works as in `generate`.
@@ -795,7 +820,7 @@ npm run playground        # builds the package and the playground, then serves h
 npm run playground:build  # only writes playground-dist/index.html (one self-contained file)
 ```
 
-A local, offline workbench for the built package: every option, all eight formats, live preview with zoom and download, an **Anatomy** view that colours each module by role, segment and provider details, copy-ready TypeScript for the current settings, shareable links, and a **Self-test** that runs 36 checks in your browser: canvas drawing, each Blob encoder, capability guards, provider precedence, size rounding, a round trip through independent decoders and the styled SVG variants (shapes, gradients, logo) drawn by the browser and decoded back (jsQR, ZXing and the native `BarcodeDetector` when present). "Verify scan" decodes what you see with the same engines. The decoders are development dependencies bundled into the playground only; the library never imports them.
+A local, offline workbench for the built package: every option, all eight formats, live preview with zoom and download, an **Anatomy** view that colours each module by role, segment and provider details, copy-ready TypeScript for the current settings, shareable links, and a **Self-test** that runs 38 checks in your browser: canvas drawing, each Blob encoder, capability guards, provider precedence, size rounding, a round trip through independent decoders and the styled SVG variants (shapes, gradients, logo) drawn by the browser and decoded back (jsQR, ZXing and the native `BarcodeDetector` when present). "Verify scan" decodes what you see with the same engines. The decoders are development dependencies bundled into the playground only; the library never imports them.
 
 ## Quality and verification
 
@@ -821,7 +846,7 @@ Report vulnerabilities privately; see [SECURITY.md](SECURITY.md).
 
 ## Limitations
 
-- Only QR Code Model 2. Micro QR and rMQR are not supported.
+- QR Code Model 2, Micro QR and rMQR. Original (Model 1) QR Code and other 2D symbologies are not supported. Micro QR and rMQR have no logo or structured append.
 - PNG output is two-colour (1-bit palette). Rounded modules, gradients and logos are SVG-only (draw the SVG on a canvas for a PNG); the canvas renderer draws square modules.
 - Kanji mode is strictly JIS X 0208 (6 872 characters; seven characters whose Windows and JIS mappings disagree use byte mode instead).
 - Real-device scanning (iOS / Android cameras) and real-browser runs have not yet been part of the automated verification.
